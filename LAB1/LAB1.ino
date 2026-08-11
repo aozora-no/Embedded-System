@@ -1,5 +1,5 @@
 #include "_sevenSegment.h"
-
+//hello test -jastien
 const byte segPins[7] = {13, 12, 11, 10, 9, 8, 7};
 const byte BT1 = 6, BT2 = 5, BT3 = 4, BT4 = 3, BT5 = 2;
 
@@ -7,6 +7,7 @@ SevenSegment display(segPins);
 Buttons buttons(BT1, BT2, BT3, BT4, BT5);
 
 int value = 0;
+int test = 1;
 
 enum AutoMode { AUTO_NONE, AUTO_UP, AUTO_DOWN };
 AutoMode autoMode = AUTO_NONE;
