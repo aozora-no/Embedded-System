@@ -73,5 +73,5 @@ void loop() {
     display.showDigit(value);
   }
 
-  delay(15);
+  delay(20);
 }
