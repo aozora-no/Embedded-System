@@ -1,5 +1,5 @@
 #include "_sevenSegment.h" // Sheena entered this world; pitipiwpiw wiwiw; ay balew
-
+// hello? -jas
 const byte segPins[7] = {13, 12, 11, 10, 9, 8, 7};
 const byte BT1 = 6, BT2 = 5, BT3 = 4, BT4 = 3, BT5 = 2;
 
