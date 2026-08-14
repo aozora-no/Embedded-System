@@ -12,7 +12,7 @@ enum AutoMode { AUTO_NONE, AUTO_UP, AUTO_DOWN };
 AutoMode autoMode = AUTO_NONE;
 bool autoRunning = false;
 
-// millis() variable
+// millis() variables
 unsigned long lastStepMs = 0;
 const unsigned long autoInterval = 500;
 
