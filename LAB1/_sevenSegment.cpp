@@ -62,7 +62,7 @@ bool Buttons::pressedNow(byte pin, bool &prevState) {
   return pressed;
 }
 
-// Button press checker
+// Button press checker functions - returns true if button was just pressed
 bool Buttons::bt1Pressed() { return pressedNow(_b1, _prev1); }
 bool Buttons::bt2Pressed() { return pressedNow(_b2, _prev2); }
 bool Buttons::bt3Pressed() { return pressedNow(_b3, _prev3); }
