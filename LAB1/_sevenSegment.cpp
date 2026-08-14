@@ -26,15 +26,17 @@ void SevenSegment::begin() {
   for (byte i = 0; i < 7; i++) pinMode(_segPins[i], OUTPUT);
 }
 
+// Show a digit on the display
 void SevenSegment::showDigit(byte d) {
-  if (d > 9) return;
+  if (d > 9) return; // Only digits up to 9 can be displayed
   for (byte i = 0; i < 7; i++) {
-    bool segOn = _digitMap[d][i];
+    bool segOn = _digitMap[d][i]; // Check if segment should be ON
     digitalWrite(_segPins[i], _commonAnode ? (segOn ? LOW : HIGH)
                                            : (segOn ? HIGH : LOW));
   }
 }
 
+// Display type
  void SevenSegment::setCommonAnode(bool enabled) {
   _commonAnode = enabled;
 }
@@ -43,6 +45,7 @@ Buttons::Buttons(byte b1, byte b2, byte b3, byte b4, byte b5)
   : _b1(b1), _b2(b2), _b3(b3), _b4(b4), _b5(b5),
     _prev1(HIGH), _prev2(HIGH), _prev3(HIGH), _prev4(HIGH), _prev5(HIGH) {}
 
+// Buttons set as inputs with pull-up resistor
 void Buttons::begin() {
   pinMode(_b1, INPUT_PULLUP);
   pinMode(_b2, INPUT_PULLUP);
@@ -51,6 +54,7 @@ void Buttons::begin() {
   pinMode(_b5, INPUT_PULLUP);
 }
 
+// Detects button press
 bool Buttons::pressedNow(byte pin, bool &prevState) {
   bool cur = digitalRead(pin);
   bool pressed = (prevState == HIGH && cur == LOW);
@@ -58,6 +62,7 @@ bool Buttons::pressedNow(byte pin, bool &prevState) {
   return pressed;
 }
 
+// Button press checker
 bool Buttons::bt1Pressed() { return pressedNow(_b1, _prev1); }
 bool Buttons::bt2Pressed() { return pressedNow(_b2, _prev2); }
 bool Buttons::bt3Pressed() { return pressedNow(_b3, _prev3); }
