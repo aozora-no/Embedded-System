@@ -1,5 +1,5 @@
-#include "_sevenSegment.h"
-#include <Arduino.h>
+#include "_sevenSegment.h" // Include header file
+#include <Arduino.h> // Include Arduino Library
 
 //SevenSegment
 const byte SevenSegment::_digitMap[10][7] = {
@@ -16,10 +16,12 @@ const byte SevenSegment::_digitMap[10][7] = {
   {1,1,1,1,0,1,1}  // 9
 };
 
+// Constructor - saves the pin numbers
 SevenSegment::SevenSegment(const byte segPins[7]) {
   for (byte i = 0; i < 7; i++) _segPins[i] = segPins[i];
 }
 
+// Sets all segment pins as outputs
 void SevenSegment::begin() {
   for (byte i = 0; i < 7; i++) pinMode(_segPins[i], OUTPUT);
 }
