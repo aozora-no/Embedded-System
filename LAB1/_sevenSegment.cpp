@@ -40,6 +40,7 @@ void SevenSegment::showDigit(byte d) {
  void SevenSegment::setCommonAnode(bool enabled) {
   _commonAnode = enabled;
 }
+
 // Buttons
 Buttons::Buttons(byte b1, byte b2, byte b3, byte b4, byte b5)
   : _b1(b1), _b2(b2), _b3(b3), _b4(b4), _b5(b5),
