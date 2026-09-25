@@ -1,250 +1,270 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>HygieneMist IoT Dashboard</title>
-    
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Caacupe+One&family=Scoutie+Sans:ital,wght@0,400..700;1,400..700&display=swap" rel="stylesheet">
-         
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Caacupe+One&family=Scoutie+Sans:ital,wght@0,400..700;1,400..700&display=swap"
+      rel="stylesheet" />
+
     <style>
-        :root {
-            --primary-color: #2c3e50;
-            --ready-color: #27ae60;
-            --warning-color: #f1c40f;
-            --critical-color: #c0392b;
-            --bg-color: #ecf0f1;
-            --card-bg: #ffffff;
-        }
+      :root {
+        --primary-color: #2c3e50;
+        --ready-color: #27ae60;
+        --warning-color: #f1c40f;
+        --critical-color: #c0392b;
+        --bg-color: #ecf0f1;
+        --card-bg: #ffffff;
+      }
 
-        body {
-            /* Scoutie Sans applied to the rest of the dashboard */
-            font-family: 'Scoutie Sans', sans-serif;
-            background-color: var(--bg-color);
-            color: var(--primary-color);
-            margin: 0;
-            padding: 20px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-        }
+      body {
+        /* Scoutie Sans applied to the rest of the dashboard */
+        font-family: "Scoutie Sans", sans-serif;
+        background-color: var(--bg-color);
+        color: var(--primary-color);
+        margin: 0;
+        padding: 20px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
 
-        h1 {
-            /* Caacupé One applied specifically to the main title */
-            font-family: 'Caacupe One', sans-serif;
-            text-align: center;
-            margin-bottom: 5px;
-            font-size: 2.5em;
-        }
+      h1 {
+        /* Caacupé One applied specifically to the main title */
+        font-family: "Caacupe One", sans-serif;
+        text-align: center;
+        margin-bottom: 5px;
+        font-size: 2.5em;
+      }
 
-        .subtitle {
-            text-align: center;
-            font-size: 1.2em;
-            color: #7f8c8d;
-            margin-bottom: 30px;
-        }
+      .subtitle {
+        text-align: center;
+        font-size: 1.2em;
+        color: #7f8c8d;
+        margin-bottom: 30px;
+      }
 
-        .dashboard-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 20px;
-            width: 100%;
-            max-width: 1000px;
-        }
+      .dashboard-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 20px;
+        width: 100%;
+        max-width: 1000px;
+      }
 
-        .card {
-            background-color: var(--card-bg);
-            border-radius: 10px;
-            padding: 25px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-            text-align: center;
-            transition: all 0.3s ease;
-        }
+      .card {
+        background-color: var(--card-bg);
+        border-radius: 10px;
+        padding: 25px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        text-align: center;
+        transition: all 0.3s ease;
+      }
 
-        .card h2 {
-            margin-top: 0;
-            font-size: 1.5em;
-            color: #34495e;
-            border-bottom: 2px solid var(--bg-color);
-            padding-bottom: 10px;
-        }
+      .card h2 {
+        margin-top: 0;
+        font-size: 1.5em;
+        color: #34495e;
+        border-bottom: 2px solid var(--bg-color);
+        padding-bottom: 10px;
+      }
 
-        /* Supply Progress Bar */
-        .progress-container {
-            width: 100%;
-            background-color: #e0e0e0;
-            border-radius: 25px;
-            margin: 20px 0;
-            height: 30px;
-            overflow: hidden;
-        }
+      /* Supply Progress Bar */
+      .progress-container {
+        width: 100%;
+        background-color: #e0e0e0;
+        border-radius: 25px;
+        margin: 20px 0;
+        height: 30px;
+        overflow: hidden;
+      }
 
-        .progress-bar {
-            height: 100%;
-            background-color: var(--ready-color);
-            width: 100%;
-            transition: width 0.5s ease, background-color 0.5s ease;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-size: 1.2em;
-        }
+      .progress-bar {
+        height: 100%;
+        background-color: var(--ready-color);
+        width: 100%;
+        transition:
+          width 0.5s ease,
+          background-color 0.5s ease;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-size: 1.2em;
+      }
 
-        /* Status Indicators */
-        .status-badge {
-            display: inline-block;
-            padding: 10px 20px;
-            border-radius: 20px;
-            font-size: 1.1em;
-            color: white;
-            background-color: var(--ready-color);
-            margin-top: 15px;
-            transition: background-color 0.3s ease;
-        }
+      /* Status Indicators */
+      .status-badge {
+        display: inline-block;
+        padding: 10px 20px;
+        border-radius: 20px;
+        font-size: 1.1em;
+        color: white;
+        background-color: var(--ready-color);
+        margin-top: 15px;
+        transition: background-color 0.3s ease;
+      }
 
-        .alert-yellow { background-color: var(--warning-color); color: #333; }
-        .alert-red { background-color: var(--critical-color); }
+      .alert-yellow {
+        background-color: var(--warning-color);
+        color: #333;
+      }
+      .alert-red {
+        background-color: var(--critical-color);
+      }
 
-        p {
-            font-size: 1.2em;
-        }
+      p {
+        font-size: 1.2em;
+      }
 
-        /* Simulation Panel */
-        .sim-panel {
-            margin-top: 40px;
-            padding: 20px;
-            background: #fff;
-            border: 2px dashed #95a5a6;
-            border-radius: 10px;
-            max-width: 1000px;
-            width: 100%;
-            box-sizing: border-box;
-        }
-        .sim-panel button {
-            /* Inherits Scoutie Sans naturally, or forcefully set it */
-            font-family: 'Scoutie Sans', sans-serif;
-            font-size: 1.1em;
-            padding: 10px 15px;
-            margin: 5px;
-            cursor: pointer;
-            border: none;
-            border-radius: 5px;
-            background: #3498db;
-            color: white;
-        }
-        .sim-panel button:hover { background: #2980b9; }
+      /* Simulation Panel */
+      .sim-panel {
+        margin-top: 40px;
+        padding: 20px;
+        background: #fff;
+        border: 2px dashed #95a5a6;
+        border-radius: 10px;
+        max-width: 1000px;
+        width: 100%;
+        box-sizing: border-box;
+      }
+      .first h2 {
+        margin-bottom: 40px;
+      }
+      .sim-panel button {
+        /* Inherits Scoutie Sans naturally, or forcefully set it */
+        font-family: "Scoutie Sans", sans-serif;
+        font-size: 1.1em;
+        padding: 10px 15px;
+        margin: 5px;
+        cursor: pointer;
+        border: none;
+        border-radius: 5px;
+        background: #3498db;
+        color: white;
+      }
+      .sim-panel button:hover {
+        background: #2980b9;
+      }
     </style>
-</head>
-<body>
-
+  </head>
+  <body>
     <h1>HygieneMist Dashboard</h1>
     <div class="subtitle">IoT-Based Touchless Hand Sanitizer Dispenser</div>
 
     <div class="dashboard-grid">
-        <!-- Supply Level Card -->
-        <div class="card" id="card-supply">
-            <h2>Sanitizer Supply</h2>
-            <div class="progress-container">
-                <div class="progress-bar" id="supply-bar">100%</div>
-            </div>
-            <p id="supply-text">Reservoir is full.</p>
+      <!-- Supply Level Card -->
+      <div class="card first" id="card-supply">
+        <h2>Sanitizer Supply</h2>
+        <div class="progress-container">
+          <div class="progress-bar" id="supply-bar">100%</div>
         </div>
+        <p id="supply-text">Reservoir is full.</p>
+      </div>
 
-        <!-- Spill Chamber Card -->
-        <div class="card" id="card-spill">
-            <h2>Spill Collection Chamber</h2>
-            <div class="status-badge" id="spill-badge">NORMAL (DRY)</div>
-            <p id="spill-text">No leaks detected.</p>
-        </div>
+      <!-- Spill Chamber Card -->
+      <div class="card" id="card-spill">
+        <h2>Spill Collection Chamber</h2>
+        <div class="status-badge" id="spill-badge">NORMAL (DRY)</div>
+        <p id="spill-text">No leaks detected.</p>
+      </div>
 
-        <!-- System Status Card -->
-        <div class="card" id="card-system">
-            <h2>Device Status</h2>
-            <div class="status-badge" id="system-badge">READY</div>
-            <p id="system-text">Pump enabled. Waiting for hand detection.</p>
-        </div>
+      <!-- System Status Card -->
+      <div class="card" id="card-system">
+        <h2>Device Status</h2>
+        <div class="status-badge" id="system-badge">READY</div>
+        <p id="system-text">Pump enabled. Waiting for hand detection.</p>
+      </div>
     </div>
 
     <!-- Simulator Controls -->
     <div class="sim-panel">
-        <h3>Backend Simulation Controls</h3>
-        <p>Use these buttons to simulate incoming IoT payloads from the ESP-01S:</p>
-        <button onclick="updateDashboard(100, 'dry')">Reset (Full & Dry)</button>
-        <button onclick="updateDashboard(45, 'dry')">Simulate Usage (45% Supply)</button>
-        <button onclick="updateDashboard(30, 'lower')">Trigger Lower Spill Sensor</button>
-        <button onclick="updateDashboard(25, 'upper')">Trigger Upper Spill Sensor</button>
-        <button onclick="updateDashboard(0, 'dry')">Empty Supply</button>
+      <h3>Backend Simulation Controls</h3>
+      <p>
+        Use these buttons to simulate incoming IoT payloads from the ESP-01S:
+      </p>
+      <button onclick="updateDashboard(100, 'dry')">Reset (Full & Dry)</button>
+      <button onclick="updateDashboard(45, 'dry')">
+        Simulate Usage (45% Supply)
+      </button>
+      <button onclick="updateDashboard(30, 'lower')">
+        Trigger Lower Spill Sensor
+      </button>
+      <button onclick="updateDashboard(25, 'upper')">
+        Trigger Upper Spill Sensor
+      </button>
+      <button onclick="updateDashboard(0, 'dry')">Empty Supply</button>
     </div>
 
     <script>
-        function updateDashboard(supplyPercent, spillState) {
-            
-            // 1. Update Supply
-            const supplyBar = document.getElementById('supply-bar');
-            const supplyText = document.getElementById('supply-text');
-            supplyBar.style.width = supplyPercent + '%';
-            supplyBar.innerText = supplyPercent + '%';
+      function updateDashboard(supplyPercent, spillState) {
+        // 1. Update Supply
+        const supplyBar = document.getElementById("supply-bar");
+        const supplyText = document.getElementById("supply-text");
+        supplyBar.style.width = supplyPercent + "%";
+        supplyBar.innerText = supplyPercent + "%";
 
-            if (supplyPercent <= 10) {
-                supplyBar.style.backgroundColor = 'var(--critical-color)';
-                supplyText.innerText = 'Supply critically low! Refill soon.';
-            } else if (supplyPercent <= 30) {
-                supplyBar.style.backgroundColor = 'var(--warning-color)';
-                supplyText.innerText = 'Supply running low.';
-            } else {
-                supplyBar.style.backgroundColor = 'var(--ready-color)';
-                supplyText.innerText = 'Reservoir level healthy.';
-            }
-
-            // 2. Update Spill Chamber & System Status
-            const spillBadge = document.getElementById('spill-badge');
-            const spillText = document.getElementById('spill-text');
-            const systemBadge = document.getElementById('system-badge');
-            const systemText = document.getElementById('system-text');
-
-            if (spillState === 'upper') {
-                spillBadge.className = 'status-badge alert-red';
-                spillBadge.innerText = 'CRITICAL ALERT';
-                spillText.innerText = 'Upper sensor active. Chamber full!';
-                
-                systemBadge.className = 'status-badge alert-red';
-                systemBadge.innerText = 'PUMP DISABLED';
-                systemText.innerText = 'Dispensing halted until chamber is cleaned.';
-
-            } else if (spillState === 'lower') {
-                spillBadge.className = 'status-badge alert-yellow';
-                spillBadge.innerText = 'MAINTENANCE REQ.';
-                spillText.innerText = 'Lower sensor active. Please clean chamber soon.';
-                
-                if(supplyPercent <= 0) {
-                    systemBadge.className = 'status-badge alert-red';
-                    systemBadge.innerText = 'PUMP DISABLED';
-                    systemText.innerText = 'Reservoir empty. Dispensing halted.';
-                } else {
-                    systemBadge.className = 'status-badge';
-                    systemBadge.innerText = 'READY';
-                    systemText.innerText = 'Pump enabled. Warning active, but safe to dispense.';
-                }
-
-            } else {
-                spillBadge.className = 'status-badge';
-                spillBadge.innerText = 'NORMAL (DRY)';
-                spillText.innerText = 'No leaks detected.';
-                
-                if(supplyPercent <= 0) {
-                    systemBadge.className = 'status-badge alert-red';
-                    systemBadge.innerText = 'PUMP DISABLED';
-                    systemText.innerText = 'Reservoir empty. Dispensing halted.';
-                } else {
-                    systemBadge.className = 'status-badge';
-                    systemBadge.innerText = 'READY';
-                    systemText.innerText = 'Pump enabled. Waiting for hand detection.';
-                }
-            }
+        if (supplyPercent <= 10) {
+          supplyBar.style.backgroundColor = "var(--critical-color)";
+          supplyText.innerText = "Supply critically low! Refill soon.";
+        } else if (supplyPercent <= 30) {
+          supplyBar.style.backgroundColor = "var(--warning-color)";
+          supplyText.innerText = "Supply running low.";
+        } else {
+          supplyBar.style.backgroundColor = "var(--ready-color)";
+          supplyText.innerText = "Reservoir level healthy.";
         }
+
+        // 2. Update Spill Chamber & System Status
+        const spillBadge = document.getElementById("spill-badge");
+        const spillText = document.getElementById("spill-text");
+        const systemBadge = document.getElementById("system-badge");
+        const systemText = document.getElementById("system-text");
+
+        if (spillState === "upper") {
+          spillBadge.className = "status-badge alert-red";
+          spillBadge.innerText = "CRITICAL ALERT";
+          spillText.innerText = "Upper sensor active. Chamber full!";
+
+          systemBadge.className = "status-badge alert-red";
+          systemBadge.innerText = "PUMP DISABLED";
+          systemText.innerText = "Dispensing halted until chamber is cleaned.";
+        } else if (spillState === "lower") {
+          spillBadge.className = "status-badge alert-yellow";
+          spillBadge.innerText = "MAINTENANCE REQ.";
+          spillText.innerText =
+            "Lower sensor active. Please clean chamber soon.";
+
+          if (supplyPercent <= 0) {
+            systemBadge.className = "status-badge alert-red";
+            systemBadge.innerText = "PUMP DISABLED";
+            systemText.innerText = "Reservoir empty. Dispensing halted.";
+          } else {
+            systemBadge.className = "status-badge";
+            systemBadge.innerText = "READY";
+            systemText.innerText =
+              "Pump enabled. Warning active, but safe to dispense.";
+          }
+        } else {
+          spillBadge.className = "status-badge";
+          spillBadge.innerText = "NORMAL (DRY)";
+          spillText.innerText = "No leaks detected.";
+
+          if (supplyPercent <= 0) {
+            systemBadge.className = "status-badge alert-red";
+            systemBadge.innerText = "PUMP DISABLED";
+            systemText.innerText = "Reservoir empty. Dispensing halted.";
+          } else {
+            systemBadge.className = "status-badge";
+            systemBadge.innerText = "READY";
+            systemText.innerText = "Pump enabled. Waiting for hand detection.";
+          }
+        }
+      }
     </script>
-</body>
+  </body>
 </html>
