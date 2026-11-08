@@ -1,0 +1,1375 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PurePoint | Smart Sanitizer Dispenser</title>
+
+    <style>
+      :root {
+        --bg: #f3f6f8;
+        --white: #ffffff;
+        --navy: #102536;
+        --teal: #14a99a;
+        --teal-light: #e6f7f4;
+        --blue: #578fe0;
+        --gold: #dba342;
+        --purple: #8b78c8;
+        --text: #193243;
+        --muted: #82939e;
+        --border: #e5ecef;
+        --shadow: 0 8px 25px rgba(24, 49, 65, 0.05);
+      }
+
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        font-family: Inter, Arial, sans-serif;
+        background: var(--bg);
+        color: var(--text);
+      }
+
+      input[type="radio"],
+      input[type="checkbox"] {
+        position: absolute;
+        opacity: 0;
+        pointer-events: none;
+      }
+
+      .app {
+        min-height: 100vh;
+        display: grid;
+        grid-template-columns: 245px 1fr;
+      }
+
+      /* SIDEBAR */
+
+      .sidebar {
+        background: var(--navy);
+        color: white;
+        padding: 28px 20px;
+        display: flex;
+        flex-direction: column;
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 45px;
+      }
+
+      .brand-icon {
+        width: 42px;
+        height: 42px;
+        border-radius: 13px;
+        background: linear-gradient(135deg, #37d1bd, #118e86);
+        display: grid;
+        place-items: center;
+        font-size: 22px;
+      }
+
+      .brand h2 {
+        font-size: 18px;
+      }
+
+      .brand p {
+        font-size: 10px;
+        color: #9db2bf;
+        letter-spacing: 1.5px;
+      }
+
+      .nav-title {
+        font-size: 10px;
+        color: #7891a2;
+        letter-spacing: 2px;
+        margin-bottom: 12px;
+      }
+
+      .nav-item {
+        display: block;
+        padding: 13px;
+        margin-bottom: 6px;
+        border-radius: 10px;
+        color: #a8bbc6;
+        font-size: 13px;
+        text-decoration: none;
+        transition: 0.25s;
+      }
+
+      .nav-item:hover,
+      .nav-item.active {
+        background: #203d50;
+        color: white;
+      }
+
+      .sidebar-bottom {
+        margin-top: auto;
+        padding: 16px;
+        border-radius: 13px;
+        background: #183547;
+        font-size: 11px;
+        color: #a8bbc6;
+      }
+
+      .sidebar-bottom strong {
+        display: block;
+        color: white;
+        margin-bottom: 7px;
+      }
+
+      /* MAIN CONTENT */
+
+      main {
+        padding: 32px;
+        min-width: 0;
+      }
+
+      .header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 25px;
+        gap: 15px;
+      }
+
+      .header h1 {
+        font-size: 27px;
+        letter-spacing: -0.7px;
+      }
+
+      .header p {
+        font-size: 12px;
+        color: var(--muted);
+        margin-top: 6px;
+      }
+
+      .date {
+        background: white;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 11px 15px;
+        color: var(--muted);
+        font-size: 11px;
+      }
+
+      /* MODE SELECTOR */
+
+      .mode-card {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 20px;
+        padding: 17px;
+        background: white;
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        box-shadow: var(--shadow);
+        margin-bottom: 15px;
+      }
+
+      .mode-title {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+
+      .mode-icon {
+        width: 40px;
+        height: 40px;
+        border-radius: 12px;
+        background: var(--teal-light);
+        display: grid;
+        place-items: center;
+        font-size: 19px;
+        transition: 0.3s;
+      }
+
+      .mode-title strong {
+        display: block;
+        font-size: 13px;
+      }
+
+      .mode-title span {
+        color: var(--muted);
+        font-size: 10px;
+      }
+
+      .mode-selector {
+        display: flex;
+        background: #f0f3f5;
+        padding: 4px;
+        border-radius: 12px;
+        gap: 4px;
+      }
+
+      .mode-selector label {
+        padding: 10px 17px;
+        border-radius: 9px;
+        color: #82939e;
+        font-size: 10px;
+        font-weight: 800;
+        cursor: pointer;
+        transition: 0.3s;
+        text-align: center;
+      }
+
+      .mode-selector label:hover {
+        color: var(--teal);
+        background: #e7eeef;
+      }
+
+      #auto:checked ~ .app .mode-selector label[for="auto"],
+      #maintenance:checked ~ .app .mode-selector label[for="maintenance"],
+      #sleep:checked ~ .app .mode-selector label[for="sleep"] {
+        background: white;
+        color: var(--teal);
+        box-shadow: 0 3px 9px #19324312;
+      }
+
+      /* MODE STATUS BANNERS */
+
+      .banner {
+        padding: 13px 16px;
+        margin-bottom: 22px;
+        border-radius: 11px;
+        font-size: 11px;
+        transition: 0.3s;
+        background: var(--teal-light);
+        color: #198879;
+      }
+
+      .maintenance-banner,
+      .sleep-banner {
+        display: none;
+      }
+
+      .maintenance-banner {
+        background: #fff4e3;
+        color: #a47528;
+      }
+
+      .sleep-banner {
+        background: #eef0fb;
+        color: #6674ad;
+      }
+
+      #maintenance:checked ~ .app .auto-banner,
+      #sleep:checked ~ .app .auto-banner {
+        display: none;
+      }
+
+      #maintenance:checked ~ .app .maintenance-banner,
+      #sleep:checked ~ .app .sleep-banner {
+        display: block;
+      }
+
+      /* GENERAL SECTIONS */
+
+      .section {
+        margin-top: 25px;
+      }
+
+      .section-heading {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 13px;
+      }
+
+      .section-heading h2 {
+        font-size: 15px;
+      }
+
+      .section-heading p {
+        font-size: 10px;
+        color: var(--muted);
+        margin-top: 4px;
+      }
+
+      .tag {
+        background: var(--teal-light);
+        color: var(--teal);
+        font-size: 9px;
+        font-weight: 800;
+        padding: 6px 10px;
+        border-radius: 20px;
+      }
+
+      .grid {
+        display: grid;
+        gap: 14px;
+      }
+
+      .sensor-kpis {
+        grid-template-columns: repeat(4, 1fr);
+      }
+
+      .card {
+        background: white;
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 18px;
+        box-shadow: var(--shadow);
+        transition:
+          transform 0.25s,
+          box-shadow 0.25s;
+      }
+
+      .card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 12px 28px rgba(24, 49, 65, 0.09);
+      }
+
+      .kpi-label {
+        font-size: 11px;
+        color: var(--muted);
+      }
+
+      .kpi-icon {
+        width: 34px;
+        height: 34px;
+        border-radius: 10px;
+        display: grid;
+        place-items: center;
+        font-size: 18px;
+        margin-bottom: 14px;
+      }
+
+      .kpi-value {
+        font-size: 28px;
+        font-weight: 800;
+        margin: 9px 0 4px;
+      }
+
+      .kpi-description {
+        font-size: 10px;
+        color: var(--muted);
+      }
+
+      .teal {
+        background: #e6f7f4;
+        color: #159d91;
+      }
+      .blue {
+        background: #edf4ff;
+        color: var(--blue);
+      }
+      .gold {
+        background: #fff5e6;
+        color: var(--gold);
+      }
+      .purple {
+        background: #f1edff;
+        color: var(--purple);
+      }
+
+      /* CAPACITY */
+
+      .main-grid {
+        grid-template-columns: 1.3fr 1fr;
+      }
+
+      .tank-area {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 35px;
+        padding: 22px 5px 8px;
+      }
+
+      .tank {
+        position: relative;
+        height: 190px;
+        width: 110px;
+        border: 4px solid #b9ccd1;
+        border-top: 0;
+        border-radius: 8px 8px 17px 17px;
+        overflow: hidden;
+        background: #f7fbfc;
+      }
+
+      .liquid {
+        position: absolute;
+        bottom: 0;
+        width: 100%;
+        height: 69%;
+        background: linear-gradient(180deg, #70ded3, #16a99a);
+        transition: height 0.8s ease;
+      }
+
+      .liquid::before {
+        content: "";
+        position: absolute;
+        top: -5px;
+        width: 100%;
+        height: 10px;
+        background: #93eee4;
+        border-radius: 50%;
+        animation: wave 3s ease-in-out infinite;
+      }
+
+      .tank-percent {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        color: white;
+        font-size: 22px;
+        font-weight: 800;
+        text-shadow: 0 1px 5px #16786f;
+      }
+
+      @keyframes wave {
+        0%,
+        100% {
+          transform: translateX(-2px);
+        }
+        50% {
+          transform: translateX(2px);
+        }
+      }
+
+      .capacity-details {
+        flex: 1;
+      }
+
+      .capacity-big {
+        font-size: 38px;
+        font-weight: 800;
+      }
+
+      .capacity-details p {
+        font-size: 11px;
+        color: var(--muted);
+        margin: 5px 0 20px;
+      }
+
+      .progress {
+        height: 8px;
+        background: #edf1f3;
+        border-radius: 20px;
+        overflow: hidden;
+      }
+
+      .progress-fill {
+        height: 100%;
+        width: 69%;
+        background: linear-gradient(90deg, #24c6b7, #118d83);
+        border-radius: 20px;
+      }
+
+      .progress-label {
+        display: flex;
+        justify-content: space-between;
+        font-size: 10px;
+        margin-bottom: 8px;
+      }
+
+      .right-column {
+        display: grid;
+        gap: 14px;
+      }
+
+      .recommendation {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        margin-top: 18px;
+        padding: 14px;
+        background: #eaf8f4;
+        border-radius: 12px;
+        color: #168b7d;
+      }
+
+      .recommendation strong {
+        font-size: 12px;
+      }
+
+      .recommendation p {
+        font-size: 10px;
+        margin-top: 5px;
+        line-height: 1.6;
+        color: #688b85;
+      }
+
+      /* PUMP */
+
+      .pump-status {
+        display: flex;
+        align-items: center;
+        gap: 13px;
+        margin: 15px 0;
+      }
+
+      .pump-icon {
+        background: #eaf5f5;
+        color: #149d91;
+        width: 45px;
+        height: 45px;
+        border-radius: 12px;
+        display: grid;
+        place-items: center;
+        font-size: 21px;
+      }
+
+      .pump-status strong {
+        display: block;
+        font-size: 12px;
+      }
+
+      .pump-status p {
+        color: var(--muted);
+        font-size: 10px;
+      }
+
+      .pump-details {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+      }
+
+      .pump-details div {
+        padding: 10px;
+        background: #f6f8f9;
+        border-radius: 9px;
+      }
+
+      .pump-details small {
+        display: block;
+        color: var(--muted);
+        font-size: 9px;
+      }
+
+      .pump-details strong {
+        font-size: 12px;
+      }
+
+      /* LOGGING TABLE */
+
+      .table-card {
+        overflow-x: auto;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        min-width: 650px;
+        text-align: left;
+      }
+
+      th {
+        background: #f7f9fa;
+        color: #83949e;
+        font-size: 9px;
+        text-transform: uppercase;
+        letter-spacing: 0.6px;
+        padding: 13px;
+      }
+
+      td {
+        font-size: 10px;
+        padding: 13px;
+        border-bottom: 1px solid #edf1f3;
+        color: #586e7b;
+      }
+
+      tr:last-child td {
+        border-bottom: 0;
+      }
+
+      /* MAINTENANCE MODE */
+
+      .maintenance-panel,
+      .sleep-panel {
+        display: none;
+        margin-top: 20px;
+        animation: fadeIn 0.4s ease;
+      }
+
+      #maintenance:checked ~ .app .maintenance-panel {
+        display: block;
+      }
+
+      #sleep:checked ~ .app .sleep-panel {
+        display: block;
+      }
+
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+          transform: translateY(10px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      .maintenance-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 15px;
+        margin-top: 15px;
+      }
+
+      .subcard {
+        background: #fff;
+        border: 1px solid var(--border);
+        border-radius: 13px;
+        padding: 16px;
+      }
+
+      .subcard h3 {
+        font-size: 12px;
+        margin-bottom: 7px;
+      }
+
+      .subcard > p {
+        color: var(--muted);
+        font-size: 10px;
+        margin-bottom: 14px;
+      }
+
+      .sensor-check {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-top: 1px solid var(--border);
+        padding: 13px 0;
+        gap: 8px;
+      }
+
+      .sensor-check strong {
+        font-size: 10px;
+      }
+
+      .sensor-check span {
+        font-size: 10px;
+        color: var(--teal);
+        font-weight: 800;
+      }
+
+      .reading-button {
+        border: 1px solid #dce8eb;
+        background: #f8fafb;
+        border-radius: 7px;
+        padding: 7px 10px;
+        font-size: 9px;
+        cursor: pointer;
+        color: #557080;
+      }
+
+      /* CSS ONLY PUMP SWITCH */
+
+      .pump-toggle-label {
+        display: inline-flex;
+        align-items: center;
+        gap: 9px;
+        cursor: pointer;
+        font-size: 10px;
+        margin: 8px 0 16px;
+      }
+
+      .switch {
+        width: 39px;
+        height: 22px;
+        background: #d4dde1;
+        border-radius: 20px;
+        padding: 3px;
+        transition: 0.3s;
+      }
+
+      .switch::after {
+        content: "";
+        display: block;
+        width: 16px;
+        height: 16px;
+        background: white;
+        border-radius: 50%;
+        transition: 0.3s;
+      }
+
+      #pump-enabled:checked + label .switch {
+        background: var(--teal);
+      }
+
+      #pump-enabled:checked + label .switch::after {
+        transform: translateX(17px);
+      }
+
+      .pump-state-off {
+        display: inline;
+        color: #c05e60;
+      }
+
+      .pump-state-on {
+        display: none;
+        color: var(--teal);
+      }
+
+      #pump-enabled:checked ~ .pump-output .pump-state-off {
+        display: none;
+      }
+
+      #pump-enabled:checked ~ .pump-output .pump-state-on {
+        display: inline;
+      }
+
+      .control-label {
+        display: block;
+        font-size: 10px;
+        color: var(--muted);
+        margin: 14px 0 8px;
+      }
+
+      input[type="range"] {
+        width: 100%;
+        accent-color: var(--teal);
+      }
+
+      /* SLEEP MODE */
+
+      .sleep-panel {
+        background: linear-gradient(135deg, #fafbff, #f0f2fb);
+        border: 1px solid #e1e5f4;
+        padding: 24px;
+        border-radius: 15px;
+      }
+
+      .sleep-info {
+        display: flex;
+        align-items: center;
+        gap: 15px;
+      }
+
+      .sleep-icon {
+        background: #e5e9fa;
+        color: #6879b8;
+        width: 49px;
+        height: 49px;
+        display: grid;
+        place-items: center;
+        border-radius: 15px;
+        font-size: 22px;
+      }
+
+      .sleep-info strong {
+        display: block;
+        font-size: 14px;
+      }
+
+      .sleep-info p {
+        color: #8993ad;
+        font-size: 10px;
+        margin-top: 5px;
+      }
+
+      .sleep-stat-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 13px;
+        margin-top: 23px;
+      }
+
+      .sleep-stat {
+        background: white;
+        padding: 15px;
+        border-radius: 11px;
+      }
+
+      .sleep-stat small {
+        display: block;
+        font-size: 9px;
+        color: var(--muted);
+      }
+
+      .sleep-stat strong {
+        display: block;
+        font-size: 12px;
+        margin-top: 5px;
+      }
+
+      /* WAKE BUTTON */
+
+      .action-button {
+        display: inline-block;
+        background: var(--teal);
+        color: white;
+        padding: 11px 18px;
+        font-size: 10px;
+        font-weight: bold;
+        text-decoration: none;
+        border-radius: 9px;
+        cursor: pointer;
+        margin-top: 17px;
+        transition: 0.25s;
+      }
+
+      .action-button:hover {
+        background: #0c8f85;
+        transform: translateY(-2px);
+      }
+
+      /* FOOTER */
+
+      footer {
+        margin-top: 35px;
+        padding: 15px 0;
+        border-top: 1px solid var(--border);
+        color: #9aa8b1;
+        font-size: 9px;
+        display: flex;
+        justify-content: space-between;
+      }
+
+      /* MOBILE RESPONSIVE */
+
+      @media (max-width: 1100px) {
+        .app {
+          grid-template-columns: 205px 1fr;
+        }
+        main {
+          padding: 23px;
+        }
+        .sensor-kpis {
+          grid-template-columns: repeat(2, 1fr);
+        }
+      }
+
+      @media (max-width: 800px) {
+        .app {
+          grid-template-columns: 1fr;
+        }
+        .sidebar {
+          padding: 17px;
+        }
+        .brand {
+          margin: 0;
+        }
+        .sidebar nav,
+        .nav-title,
+        .sidebar-bottom {
+          display: none;
+        }
+        main {
+          padding: 19px;
+        }
+        .mode-card {
+          flex-direction: column;
+          align-items: stretch;
+        }
+        .mode-selector {
+          width: 100%;
+        }
+        .mode-selector label {
+          flex: 1;
+          padding: 10px 5px;
+        }
+        .main-grid {
+          grid-template-columns: 1fr;
+        }
+        .maintenance-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      @media (max-width: 520px) {
+        .header h1 {
+          font-size: 22px;
+        }
+        .date {
+          display: none;
+        }
+        .sensor-kpis {
+          gap: 9px;
+        }
+        .card {
+          padding: 14px;
+        }
+        .kpi-value {
+          font-size: 23px;
+        }
+        .tank-area {
+          gap: 18px;
+        }
+        .tank {
+          height: 165px;
+          width: 95px;
+        }
+        .capacity-big {
+          font-size: 30px;
+        }
+        .sleep-stat-grid {
+          grid-template-columns: 1fr;
+        }
+        footer {
+          flex-direction: column;
+          gap: 5px;
+        }
+      }
+    </style>
+  </head>
+
+  <body>
+    <!-- CSS-ONLY MAIN MODE SELECTORS -->
+    <input type="radio" name="mode" id="auto" checked />
+    <input type="radio" name="mode" id="maintenance" />
+    <input type="radio" name="mode" id="sleep" />
+
+    <div class="app">
+      <!-- SIDEBAR -->
+      <aside class="sidebar">
+        <div class="brand">
+          <div class="brand-icon">💧</div>
+          <div>
+            <h2>PurePoint</h2>
+            <p>SMART DISPENSER</p>
+          </div>
+        </div>
+
+        <div class="nav-title">WORKSPACE</div>
+
+        <nav>
+          <a href="#overview" class="nav-item active">▦ Overview</a>
+          <a href="#readings" class="nav-item">◈ Sensor Readings</a>
+          <a href="#maintenance-section" class="nav-item">⚙ Maintenance</a>
+          <a href="#data-logs" class="nav-item">▤ Data Logs</a>
+          <a href="#sleep-history" class="nav-item">☾ Sleep History</a>
+        </nav>
+
+        <div class="sidebar-bottom">
+          <strong>● Device Monitoring</strong>
+          PurePoint Sanitizer Dispenser<br />
+          Control Interface
+        </div>
+      </aside>
+
+      <!-- MAIN -->
+      <main>
+        <header class="header">
+          <div>
+            <h1>Sanitizer Control Center</h1>
+            <p>Monitor sanitizer capacity and manage dispenser operation.</p>
+          </div>
+          <div class="date">DISPENSER SYSTEM · V2.0</div>
+        </header>
+
+        <!-- MODE SELECTOR -->
+        <section class="mode-card">
+          <div class="mode-title">
+            <div class="mode-icon">⚡</div>
+            <div>
+              <strong>Operating Mode</strong>
+              <span>Select the system operation mode</span>
+            </div>
+          </div>
+
+          <div class="mode-selector">
+            <label for="auto">AUTO</label>
+            <label for="maintenance">MAINTENANCE</label>
+            <label for="sleep">SLEEP</label>
+          </div>
+        </section>
+
+        <!-- MODE BANNERS -->
+        <div class="banner auto-banner">
+          ● <strong>AUTO MODE:</strong>
+          Automatic monitoring and operation are selected.
+        </div>
+
+        <div class="banner maintenance-banner">
+          ⚙ <strong>MAINTENANCE MODE:</strong>
+          Automatic operation is paused. Manual device testing is available.
+        </div>
+
+        <div class="banner sleep-banner">
+          ☾ <strong>SLEEP MODE:</strong>
+          Low-power operation selected. Telemetry is expected to pause.
+        </div>
+
+        <!-- OVERVIEW -->
+        <section class="section" id="overview">
+          <div class="section-heading">
+            <div>
+              <h2>Live Dashboard</h2>
+              <p>Current sanitizer sensor measurements</p>
+            </div>
+            <span class="tag">SYSTEM OVERVIEW</span>
+          </div>
+
+          <div class="grid sensor-kpis">
+            <div class="card">
+              <div class="kpi-icon teal">⚖</div>
+              <div class="kpi-label">LOAD CELL WEIGHT</div>
+              <div class="kpi-value">680 g</div>
+              <div class="kpi-description">Sanitizer mass · HX711</div>
+            </div>
+
+            <div class="card">
+              <div class="kpi-icon blue">⌁</div>
+              <div class="kpi-label">TOF DISTANCE</div>
+              <div class="kpi-value">42 mm</div>
+              <div class="kpi-description">Liquid surface distance</div>
+            </div>
+
+            <div class="card">
+              <div class="kpi-icon gold">▥</div>
+              <div class="kpi-label">CAPACITIVE LEVEL</div>
+              <div class="kpi-value">69%</div>
+              <div class="kpi-description">Non-contact liquid level</div>
+            </div>
+
+            <div class="card">
+              <div class="kpi-icon purple">◉</div>
+              <div class="kpi-label">COMBINED CAPACITY</div>
+              <div class="kpi-value">69%</div>
+              <div class="kpi-description">Estimated sanitizer level</div>
+            </div>
+          </div>
+        </section>
+
+        <!-- CAPACITY AND ACTUATOR -->
+        <section class="section grid main-grid">
+          <div class="card">
+            <div class="section-heading">
+              <div>
+                <h2>Sanitizer Tank Capacity</h2>
+                <p>Estimated remaining sanitizer volume</p>
+              </div>
+              <span class="tag">NORMAL</span>
+            </div>
+
+            <div class="tank-area">
+              <div class="tank">
+                <div class="liquid"></div>
+                <div class="tank-percent">69%</div>
+              </div>
+
+              <div class="capacity-details">
+                <div class="capacity-big">690 mL</div>
+                <p>Remaining sanitizer volume</p>
+
+                <div class="progress-label">
+                  <span>Tank fill level</span>
+                  <strong>69%</strong>
+                </div>
+
+                <div class="progress">
+                  <div class="progress-fill"></div>
+                </div>
+
+                <p style="margin-top: 16px">Total tank capacity: 1,000 mL</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="right-column">
+            <!-- RECOMMENDATION -->
+            <div class="card">
+              <div class="section-heading">
+                <h2>System Recommendation</h2>
+                <span class="tag">INFO</span>
+              </div>
+
+              <div class="recommendation">
+                <div style="font-size: 22px">✓</div>
+                <div>
+                  <strong>Sanitizer Level Sufficient</strong>
+                  <p>
+                    The current sanitizer level is within the normal operating
+                    range. The dispenser is ready for use.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <!-- PUMP STATUS -->
+            <div class="card">
+              <div class="section-heading">
+                <h2>Peristaltic Pump</h2>
+                <span class="tag">STANDBY</span>
+              </div>
+
+              <div class="pump-status">
+                <div class="pump-icon">⚙</div>
+                <div>
+                  <strong>Ready for Dispensing</strong>
+                  <p>Waiting for dispense command</p>
+                </div>
+              </div>
+
+              <div class="pump-details">
+                <div>
+                  <small>Driver State</small>
+                  <strong>Enabled</strong>
+                </div>
+                <div>
+                  <small>Motor Speed</small>
+                  <strong>65%</strong>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- SENSOR READINGS -->
+        <section class="section" id="readings">
+          <div class="section-heading">
+            <div>
+              <h2>Sensor Readings</h2>
+              <p>Individual sensor measurements</p>
+            </div>
+          </div>
+
+          <div class="grid sensor-kpis">
+            <div class="card">
+              <div class="kpi-icon teal">⚖</div>
+              <div class="kpi-label">LOAD CELL · HX711</div>
+              <div class="kpi-value">700 g</div>
+              <div class="kpi-description">Measured sanitizer weight</div>
+            </div>
+
+            <div class="card">
+              <div class="kpi-icon blue">⌁</div>
+              <div class="kpi-label">TIME-OF-FLIGHT</div>
+              <div class="kpi-value">42 mm</div>
+              <div class="kpi-description">Sensor-to-liquid distance</div>
+            </div>
+
+            <div class="card">
+              <div class="kpi-icon gold">▥</div>
+              <div class="kpi-label">CAPACITIVE SENSOR</div>
+              <div class="kpi-value">69%</div>
+              <div class="kpi-description">Relative liquid level</div>
+            </div>
+
+            <div class="card">
+              <div class="kpi-icon purple">◉</div>
+              <div class="kpi-label">ESTIMATED VOLUME</div>
+              <div class="kpi-value">690 mL</div>
+              <div class="kpi-description">Combined sensor estimate</div>
+            </div>
+          </div>
+        </section>
+
+        <!-- MAINTENANCE PANEL -->
+        <section class="maintenance-panel" id="maintenance-section">
+          <div class="section-heading">
+            <div>
+              <h2>Maintenance Control Panel</h2>
+              <p>Manually inspect and test the input/output devices.</p>
+            </div>
+            <span class="tag" style="background: #fff3df; color: #b47b29">
+              MANUAL CONTROL
+            </span>
+          </div>
+
+          <div class="maintenance-grid">
+            <!-- SENSOR CHECK -->
+            <div class="subcard">
+              <h3>Sensor Check</h3>
+              <p>Latest displayed readings for individual sensors.</p>
+
+              <div class="sensor-check">
+                <strong>Load Cell</strong>
+                <span>680 g</span>
+                <span class="reading-button">680 g</span>
+              </div>
+
+              <div class="sensor-check">
+                <strong>ToF Sensor</strong>
+                <span>42 mm</span>
+                <span class="reading-button">42 mm</span>
+              </div>
+
+              <div class="sensor-check">
+                <strong>Capacitive Sensor</strong>
+                <span>69%</span>
+                <span class="reading-button">69%</span>
+              </div>
+
+              <p style="margin-top: 12px">
+                Values shown are sample readings. Live sensor checks require a
+                controller connection.
+              </p>
+            </div>
+
+            <!-- ACTUATOR CONTROL -->
+            <div class="subcard">
+              <h3>Peristaltic Pump Control</h3>
+              <p>
+                Enable or disable the pump driver and configure its settings.
+              </p>
+
+              <input type="checkbox" id="pump-enabled" />
+
+              <label for="pump-enabled" class="pump-toggle-label">
+                <span class="switch"></span>
+                Enable Pump Driver
+              </label>
+
+              <div class="pump-output">
+                <p class="pump-state-off">● Driver Disabled</p>
+                <p class="pump-state-on">● Driver Enabled</p>
+              </div>
+
+              <label class="control-label">Motor Speed</label>
+              <input type="range" min="20" max="100" value="65" />
+
+              <label class="control-label">Test Pulse Duration</label>
+              <input type="range" min="250" max="3000" value="1000" />
+
+              <p style="margin-top: 15px">
+                Motor speed and pulse duration are configuration examples for
+                the maintenance interface.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <!-- SLEEP PANEL -->
+        <section class="sleep-panel">
+          <div class="sleep-info">
+            <div class="sleep-icon">☾</div>
+            <div>
+              <strong>Microcontroller Sleep Mode</strong>
+              <p>
+                The controller should enter SLEEP_MODE_PWR_DOWN. Live telemetry
+                is paused until a hardware interrupt wakes the microcontroller.
+              </p>
+            </div>
+          </div>
+
+          <div class="sleep-stat-grid">
+            <div class="sleep-stat">
+              <small>Device Status</small>
+              <strong>Sleep Selected</strong>
+            </div>
+
+            <div class="sleep-stat">
+              <small>Sleep Start Time</small>
+              <strong>Awaiting Hardware Confirmation</strong>
+            </div>
+
+            <div class="sleep-stat">
+              <small>Total Sleep Duration</small>
+              <strong>Not Available</strong>
+            </div>
+          </div>
+
+          <label for="auto" class="action-button"> ⏻ Return to AUTO </label>
+
+          <p style="font-size: 10px; color: #8691aa; margin-top: 12px">
+            Returning to AUTO changes the website interface only. Actual
+            hardware wake-up requires a supported interrupt or an always-on
+            gateway.
+          </p>
+        </section>
+
+        <!-- DATA LOGGING -->
+        <section class="section" id="data-logs">
+          <div class="section-heading">
+            <div>
+              <h2>Sensor Data Logs</h2>
+              <p>Example historical sensor measurements</p>
+            </div>
+            <span class="tag">DATA RECORDS</span>
+          </div>
+
+          <div class="card table-card">
+            <table>
+              <thead>
+                <tr>
+                  <th>Date & Time</th>
+                  <th>Load Cell</th>
+                  <th>ToF</th>
+                  <th>Capacitive</th>
+                  <th>Combined Level</th>
+                  <th>Volume</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                <tr>
+                  <td>Nov 07, 2026 · 10:00 AM</td>
+                  <td>700 g</td>
+                  <td>40 mm</td>
+                  <td>71%</td>
+                  <td>71%</td>
+                  <td>710 mL</td>
+                </tr>
+
+                <tr>
+                  <td>Nov 07, 2026 · 10:04 AM</td>
+                  <td>690 g</td>
+                  <td>41 mm</td>
+                  <td>70%</td>
+                  <td>70%</td>
+                  <td>700 mL</td>
+                </tr>
+
+                <tr>
+                  <td>Nov 07, 2026 · 10:08 AM</td>
+                  <td>680 g</td>
+                  <td>42 mm</td>
+                  <td>69%</td>
+                  <td>69%</td>
+                  <td>690 mL</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <p style="font-size: 10px; color: #8999a4; margin-top: 9px">
+            Sample records only. Automatic database logging requires a backend
+            or microcontroller connection.
+          </p>
+        </section>
+
+        <!-- SLEEP HISTORY -->
+        <section class="section" id="sleep-history">
+          <div class="section-heading">
+            <div>
+              <h2>Sleep History</h2>
+              <p>Sleep start, wake time and duration records</p>
+            </div>
+            <span class="tag">POWER MANAGEMENT</span>
+          </div>
+
+          <div class="card table-card">
+            <table>
+              <thead>
+                <tr>
+                  <th>Sleep Start</th>
+                  <th>Wake Time</th>
+                  <th>Duration</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                <tr>
+                  <td>No recorded sleep period</td>
+                  <td>—</td>
+                  <td>—</td>
+                  <td>Waiting</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <footer>
+          <span>PUREPOINT SMART SANITIZER DISPENSER</span>
+          <span>CONTROL INTERFACE · V2.0</span>
+        </footer>
+      </main>
+    </div>
+  </body>
+</html>
