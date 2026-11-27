@@ -69,35 +69,23 @@
       <div class="status-grid">
 
         <div>
-
           <span>Connection</span>
-
           <strong id="connection">Waiting</strong>
-
         </div>
 
         <div>
-
           <span>Mode</span>
-
           <strong id="mode">--</strong>
-
         </div>
 
         <div>
-
           <span>Last mode change</span>
-
           <strong id="changed">--</strong>
-
         </div>
 
         <div>
-
           <span>Sensor update</span>
-
           <strong id="freshness">--</strong>
-
         </div>
 
       </div>
@@ -146,81 +134,139 @@
 
     <h2>Sensor Data</h2>
 
-    <div class="grid">
+    <div class="sensor-layout">
 
-      <div class="sensor">
 
-        <h3>Distance</h3>
+      <!-- CONTAINER LEVEL INDICATOR -->
 
-        <div class="value" id="distance">--</div>
+      <div class="container-indicator">
 
-        <small>mm</small>
+        <svg class="container-icon"
+          viewBox="0 0 48 58"
+          fill="none"
+          aria-hidden="true">
 
-      </div>
+          <rect
+            x="8"
+            y="6"
+            width="32"
+            height="47"
+            rx="7"
+            stroke="currentColor"
+            stroke-width="2"/>
 
-      <div class="sensor">
+          <path
+            d="M16 6V2h16v4"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linejoin="round"/>
 
-        <h3>Weight</h3>
+          <path
+            class="liquid"
+            d="M12 37h24v8a4 4 0 0 1-4 4H16a4 4 0 0 1-4-4z"
+            fill="currentColor"/>
 
-        <div class="value" id="weight">--</div>
+          <path
+            d="M30 17h5m-5 8h5m-5 8h5"
+            stroke="currentColor"
+            stroke-width="1.5"
+            stroke-linecap="round"/>
 
-        <small>g</small>
+        </svg>
 
-      </div>
+        <div>
 
-      <div class="sensor">
+          <h3>Container level</h3>
 
-        <h3>Object detected</h3>
+          <div class="value"
+            id="containerLevel"
+            data-state="unknown"
+            aria-live="polite">--</div>
 
-        <div class="value" id="objectDetected">--</div>
-
-        <small>0 / 1</small>
-
-      </div>
-
-      <div class="sensor">
-
-        <h3>Non-contact 1</h3>
-
-        <div class="value" id="noncontact1">--</div>
-
-        <small>0 / 1</small>
-
-      </div>
-
-      <div class="sensor">
-
-        <h3>Non-contact 2</h3>
-
-        <div class="value" id="noncontact2">--</div>
-
-        <small>0 / 1</small>
-
-      </div>
-
-      <div class="sensor">
-
-        <h3>Pump</h3>
-
-        <div class="value" id="pump">--</div>
-
-        <small>0 / 1</small>
+        </div>
 
       </div>
 
-      <div class="sensor">
 
-        <h3>Non-contact level</h3>
+      <!-- SENSOR READINGS -->
 
-        <div class="value" id="level">--</div>
+      <div class="grid">
 
-      </div>
+        <div class="sensor">
 
-      <div class="sensor">
+          <h3>Distance</h3>
 
-        <h3>Weight status</h3>
+          <div class="value" id="distance">--</div>
 
-        <div class="value" id="weightStatus">--</div>
+          <small>mm</small>
+
+        </div>
+
+        <div class="sensor">
+
+          <h3>Weight</h3>
+
+          <div class="value" id="weight">--</div>
+
+          <small>g</small>
+
+        </div>
+
+        <div class="sensor">
+
+          <h3>Object detected</h3>
+
+          <div class="value" id="objectDetected">--</div>
+
+          <small>0 / 1</small>
+
+        </div>
+
+        <div class="sensor">
+
+          <h3>Non-contact 1</h3>
+
+          <div class="value" id="noncontact1">--</div>
+
+          <small>0 / 1</small>
+
+        </div>
+
+        <div class="sensor">
+
+          <h3>Non-contact 2</h3>
+
+          <div class="value" id="noncontact2">--</div>
+
+          <small>0 / 1</small>
+
+        </div>
+
+        <div class="sensor">
+
+          <h3>Pump</h3>
+
+          <div class="value" id="pump">--</div>
+
+          <small>0 / 1</small>
+
+        </div>
+
+        <div class="sensor">
+
+          <h3>Non-contact level</h3>
+
+          <div class="value" id="level">--</div>
+
+        </div>
+
+        <div class="sensor">
+
+          <h3>Weight status</h3>
+
+          <div class="value" id="weightStatus">--</div>
+
+        </div>
 
       </div>
 
@@ -262,7 +308,8 @@
 
       <h2>Sensor Logs</h2>
 
-      <button class="secondary" id="logRefresh"
+      <button class="secondary"
+        id="logRefresh"
         onclick="loadLogs(0, 'refresh')">
 
         Refresh
@@ -280,29 +327,17 @@
           <tr>
 
             <th>ID</th>
-
             <th>Date</th>
-
             <th>Time</th>
-
             <th>Uptime (s)</th>
-
             <th>Distance (mm)</th>
-
             <th>Weight (g)</th>
-
             <th>Object detected</th>
-
             <th>Non-contact 1</th>
-
             <th>Non-contact 2</th>
-
             <th>Pump</th>
-
             <th>Event</th>
-
             <th>Level</th>
-
             <th>Weight status</th>
 
           </tr>
@@ -312,9 +347,7 @@
         <tbody id="logTable">
 
           <tr>
-
             <td colspan="13">Loading...</td>
-
           </tr>
 
         </tbody>
@@ -325,7 +358,8 @@
 
     <div class="pagination">
 
-      <button class="secondary" id="logPrev"
+      <button class="secondary"
+        id="logPrev"
         onclick="pageStep('log', -1)" disabled>
 
         Previous
@@ -334,7 +368,8 @@
 
       <span id="logPage">Page 1</span>
 
-      <button class="secondary" id="logNext"
+      <button class="secondary"
+        id="logNext"
         onclick="pageStep('log', 1)" disabled>
 
         Next
@@ -356,7 +391,8 @@
 
       <h2>Sleep History</h2>
 
-      <button class="secondary" id="sleepRefresh"
+      <button class="secondary"
+        id="sleepRefresh"
         onclick="loadHistory('sleep', 0, 'refresh')">
 
         Refresh
@@ -374,15 +410,10 @@
           <tr>
 
             <th>Sleep date</th>
-
             <th>Sleep time</th>
-
             <th>Wake date</th>
-
             <th>Wake time</th>
-
             <th>Duration</th>
-
             <th>Status</th>
 
           </tr>
@@ -392,9 +423,7 @@
         <tbody id="sleepTable">
 
           <tr>
-
             <td colspan="6">Loading...</td>
-
           </tr>
 
         </tbody>
@@ -405,7 +434,8 @@
 
     <div class="pagination">
 
-      <button class="secondary" id="sleepPrev"
+      <button class="secondary"
+        id="sleepPrev"
         onclick="pageStep('sleep', -1)" disabled>
 
         Previous
@@ -414,7 +444,8 @@
 
       <span id="sleepPage">Page 1</span>
 
-      <button class="secondary" id="sleepNext"
+      <button class="secondary"
+        id="sleepNext"
         onclick="pageStep('sleep', 1)" disabled>
 
         Next
@@ -436,7 +467,8 @@
 
       <h2>Maintenance History</h2>
 
-      <button class="secondary" id="maintenanceRefresh"
+      <button class="secondary"
+        id="maintenanceRefresh"
         onclick="loadHistory('maintenance', 0, 'refresh')">
 
         Refresh
@@ -454,15 +486,10 @@
           <tr>
 
             <th>Start date</th>
-
             <th>Start time</th>
-
             <th>End date</th>
-
             <th>End time</th>
-
             <th>Duration</th>
-
             <th>Status</th>
 
           </tr>
@@ -472,9 +499,7 @@
         <tbody id="maintenanceTable">
 
           <tr>
-
             <td colspan="6">Loading...</td>
-
           </tr>
 
         </tbody>
@@ -485,7 +510,8 @@
 
     <div class="pagination">
 
-      <button class="secondary" id="maintenancePrev"
+      <button class="secondary"
+        id="maintenancePrev"
         onclick="pageStep('maintenance', -1)" disabled>
 
         Previous
@@ -494,7 +520,8 @@
 
       <span id="maintenancePage">Page 1</span>
 
-      <button class="secondary" id="maintenanceNext"
+      <button class="secondary"
+        id="maintenanceNext"
         onclick="pageStep('maintenance', 1)" disabled>
 
         Next
@@ -503,7 +530,8 @@
 
     </div>
 
-    <p class="feedback" id="maintenanceMessage"
+    <p class="feedback"
+      id="maintenanceMessage"
       role="status"></p>
 
   </section>
@@ -838,6 +866,103 @@ function updateButtons() {
 }
 
 
+// CONTAINER LEVEL INDICATOR
+
+function containerState(s) {
+
+  // CHECK IF SENSOR DATA IS AVAILABLE
+
+  if (!s || s.stale || !s.liveValid || s.mode === 2) {
+
+    return ["--", "unknown"];
+
+  }
+
+
+  // GET SENSOR STATUSES
+
+  const weight =
+    String(s.weightStatus ?? "").toUpperCase().trim();
+
+  const level =
+    String(s.level ?? "").toUpperCase().trim();
+
+
+  // VALIDATE WEIGHT STATUS
+
+  const validWeight =
+
+    ["LOW", "HALF", "FULL", "HIGH"].includes(weight) &&
+
+    s.weight != null &&
+
+    Number.isFinite(Number(s.weight)) &&
+
+    Number(s.weight) >= 0;
+
+
+  // VALIDATE NON-CONTACT LEVEL
+
+  const validLevel =
+
+    ["LOW", "HALF", "FULL", "HIGH"].includes(level);
+
+
+  // LOW CONTAINER LEVEL
+
+  if (
+
+    (validWeight && weight === "LOW") ||
+
+    (validLevel && level === "LOW")
+
+  ) {
+
+    return ["LOW", "low"];
+
+  }
+
+
+  // INVALID SENSOR DATA
+
+  if (!validWeight || !validLevel) {
+
+    return ["--", "unknown"];
+
+  }
+
+
+  // HALF CONTAINER LEVEL
+
+  if (weight === "HALF" || level === "HALF") {
+
+    return ["HALF", "half"];
+
+  }
+
+
+  // NORMAL CONTAINER LEVEL
+
+  return ["OK", "ok"];
+
+}
+
+
+// DISPLAY CONTAINER LEVEL
+
+function renderContainer(s) {
+
+  const [label, state] = containerState(s);
+
+  const el = $("containerLevel");
+
+  el.textContent = label;
+
+  el.dataset.state = state;
+
+}
+
+
 // LIVE DASHBOARD
 
 function refreshDashboard() {
@@ -870,9 +995,9 @@ function refreshDashboard() {
 
     $("connection").textContent = "Waiting";
 
-    updateButtons();
+    renderContainer(null);
 
-    updatePageButtons();
+    updateButtons();
 
     return;
 
@@ -998,6 +1123,11 @@ function refreshDashboard() {
     }
 
   }
+
+
+  // UPDATE CONTAINER LEVEL INDICATOR
+
+  renderContainer(s);
 
 
   // DISPLAY DEVICE ERROR AND UNSAVED HISTORY
