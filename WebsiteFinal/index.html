@@ -126,6 +126,103 @@
 
 const $ = id => document.getElementById(id);
 
+  let currentMode = -1;
+let latestStatus = null;
+let firebaseConnected = false;
+let serverOffset = 0;
+let deviceOnline = false;
+
+function formatTime(ms) {
+
+  if (!ms || Number(ms) < 1700000000000) {
+    return "Not available";
+  }
+
+  return new Date(Number(ms)).toLocaleString("en-PH", {
+    timeZone: "Asia/Manila",
+    hour12: false
+  });
+
+}
+
+// LIVE DASHBOARD
+
+function refreshDashboard() {
+
+  const raw = latestStatus;
+
+  const age = raw && typeof raw.updatedAt === "number"
+    ? Math.max(0, Date.now() + serverOffset - raw.updatedAt)
+    : Infinity;
+
+  deviceOnline = firebaseConnected &&
+    age < 20000 && raw && raw.wifi === true;
+
+  if (!raw) {
+    $("connection").textContent = "Waiting";
+    return;
+  }
+
+  const s = {
+    ...raw,
+    ageSec: Math.floor(age / 1000) + (raw.ageSec || 0)
+  };
+
+  s.stale = !deviceOnline || !s.liveValid ||
+    (s.mode !== 2 && s.ageSec > 12);
+
+  currentMode = s.mode;
+
+  $("connection").textContent =
+    deviceOnline ? "Online" : "Offline";
+
+  $("mode").textContent =
+    ["AUTO", "MAINTENANCE", "SLEEP"][s.mode] || "UNKNOWN";
+
+  $("changed").textContent =
+    formatTime(s.lastChangeAt);
+
+  if (!deviceOnline) {
+
+    $("freshness").textContent = "Last known data";
+
+  } else if (s.mode === 2) {
+
+    $("freshness").textContent = "Paused";
+
+  } else if (s.stale) {
+
+    $("freshness").textContent = "No recent data";
+
+  } else {
+
+    $("freshness").textContent = s.ageSec + "s ago";
+
+  }
+
+  if (s.liveValid) {
+
+    for (const id of [
+      "distance",
+      "weight",
+      "objectDetected",
+      "noncontact1",
+      "noncontact2",
+      "pump",
+      "level",
+      "weightStatus"
+    ]) {
+
+      $(id).textContent = s[id] ?? "--";
+
+    }
+
+  }
+
+  $("deviceError").textContent = s.error || "";
+
+}
+
 async function logout() {
 
   await auth.signOut();
