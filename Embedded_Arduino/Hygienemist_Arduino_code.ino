@@ -1,9 +1,14 @@
 #include <Arduino.h>
+#include <SPI.h>
+#include <SD.h>
+#include <limits.h>
+#include <stdlib.h>
+#include <string.h>
 #include "Sensors.h"
 #include "Communication.h"
 
 
- // PIN ASSIGNMENTS
+// PIN ASSIGNMENTS
 
 const byte wakePin = 3;
 const byte pumpPin = 7;
@@ -12,6 +17,19 @@ const byte espRx = 9;
 const byte espTx = 8;
 
 const byte sdPin = 10;
+
+
+// TIMING SETTINGS
+
+const unsigned long pumpTime = 3000;
+const unsigned long liveTime = 2000;
+const unsigned long logTime = 180000;
+const unsigned long sdTime = 10000;
+
+
+// SD CARD FILE
+
+const char logFile[] = "HYGIENE.CSV";
 
 
 // SENSOR AND COMMUNICATION OBJECTS
@@ -33,10 +51,13 @@ enum Mode {
 Mode currentMode = AUTO;
 
 
-// TIMING SETTINGS
+// SD CARD VARIABLES
 
-const unsigned long pumpTime = 3000;
-const unsigned long liveTime = 2000;
+bool sdReady = false;
+bool scanningSD = false;
+
+unsigned long recordId = 0;
+unsigned long scanOffset = 0;
 
 
 // PUMP VARIABLES
@@ -44,6 +65,10 @@ const unsigned long liveTime = 2000;
 bool pumpOn = false;
 bool pumpTriggered = true;
 
+bool dispenseCompleted = false;
+bool dispenseReading = false;
+
+byte dispenseEvent = 0;
 byte pumpEvent = 0;
 
 
@@ -59,6 +84,8 @@ bool modeLivePending = false;
 
 unsigned long pumpStart = 0;
 unsigned long lastLive = 0;
+unsigned long lastLog = 0;
+unsigned long lastSd = 0;
 
 
 // FUNCTION DECLARATIONS
@@ -105,10 +132,8 @@ void turnPumpOn() {
 
   if (pumpOn) return;
 
-
-  // IDENTIFY DISPENSING MODE
-  // 1 = AUTO
-  // 2 = MAINTENANCE
+  // 1 = AUTO DISPENSE
+  // 2 = MAINTENANCE DISPENSE
 
   pumpEvent = currentMode == MAINTENANCE ? 2 : 1;
 
@@ -138,7 +163,11 @@ void turnPumpOff() {
 
 void automaticPump() {
 
-  if (pumpOn || sensors.isTaring()) return;
+  if (
+    pumpOn ||
+    sensors.isTaring() ||
+    (dispenseCompleted && sdReady)
+  ) return;
 
 
   // REARM AFTER HAND REMOVAL
@@ -153,13 +182,9 @@ void automaticPump() {
   // DETECT HAND AND ACTIVATE PUMP
 
   if (
-
     !pumpTriggered &&
-
     sensors.handDetected() &&
-
     sensors.nearObject()
-
   ) {
 
     pumpTriggered = true;
@@ -182,16 +207,25 @@ void checkPumpTime() {
   if (millis() - pumpStart < pumpTime) return;
 
 
-  // STOP PUMP AFTER THREE SECONDS
+  // STOP PUMP
 
   turnPumpOff();
 
   sensors.resetDetection();
 
+
+  // MARK DISPENSING EVENT FOR SD LOGGING
+
+  dispenseCompleted = true;
+
+  dispenseEvent = pumpEvent;
+
+  dispenseReading = false;
+
   Serial.println(F("[PUMP] OFF - timeout"));
 
 
-  // CONFIRM MANUAL DISPENSING IS COMPLETE
+  // CONFIRM MANUAL DISPENSING COMPLETED
 
   if (pumpEvent == 2) {
 
@@ -204,7 +238,378 @@ void checkPumpTime() {
 }
 
 
-// PREPARE LIVE SENSOR DATA
+// READ ONE CSV ROW
+
+bool readRow(
+  File &file,
+  char *row,
+  size_t capacity
+) {
+
+  while (file.available()) {
+
+    size_t length = 0;
+
+    bool tooLong = false;
+
+    while (file.available()) {
+
+      int c = file.read();
+
+      if (c == '\n' || c < 0) break;
+
+      if (c == '\r') continue;
+
+      if (length < capacity - 1) {
+
+        row[length++] = c;
+
+      } else {
+
+        tooLong = true;
+
+      }
+
+    }
+
+    row[length] = '\0';
+
+    if (!tooLong && length > 0) {
+
+      return true;
+
+    }
+
+  }
+
+  return false;
+
+}
+
+
+// EXTRACT RECORD ID FROM CSV ROW
+
+unsigned long rowId(const char *row) {
+
+  // IGNORE HEADER OR INVALID ROW
+
+  if (*row < '0' || *row > '9') {
+
+    return 0;
+
+  }
+
+  char *end;
+
+  unsigned long id = strtoul(row, &end, 10);
+
+  if (*end != ',') return 0;
+
+
+  // VALIDATE NUMBER OF CSV FIELDS
+
+  int commas = 0;
+
+  for (; *row; row++) {
+
+    if (*row == ',') {
+
+      commas++;
+
+    }
+
+  }
+
+
+  // SUPPORT ORIGINAL AND LEGACY RECORDS
+
+  return (commas == 9 || commas == 10)
+    ? id
+    : 0;
+
+}
+
+
+// HANDLE SD CARD FAILURE
+
+void sdFailure(
+  const __FlashStringHelper *reason
+) {
+
+  sdReady = false;
+
+  scanningSD = false;
+
+  lastSd = millis();
+
+  Serial.print(F("[SD] ERROR: "));
+
+  Serial.println(reason);
+
+}
+
+
+// INITIALIZE SD CARD
+
+void startSD() {
+
+  sdReady = false;
+
+  scanningSD = false;
+
+  Serial.println(F("[SD] Initializing..."));
+
+  digitalWrite(sdPin, HIGH);
+
+
+  // CHECK SD CARD INITIALIZATION
+
+  if (!SD.begin(sdPin)) {
+
+    sdFailure(F("SD.begin failed"));
+
+    return;
+
+  }
+
+  Serial.println(F("[SD] Card initialized"));
+
+
+  // OPEN OR CREATE CSV FILE
+
+  File file = SD.open(logFile, FILE_WRITE);
+
+  if (!file) {
+
+    sdFailure(
+      F("Cannot open HYGIENE.CSV for writing")
+    );
+
+    return;
+
+  }
+
+
+  // CREATE HEADER IF FILE IS EMPTY
+
+  if (file.size() == 0) {
+
+    file.println(F(
+      "id,uptime_s,distance_mm,weight_g,"
+      "ultrasonic_zero,noncontact1,noncontact2,"
+      "pump,level,weight_status,event"
+    ));
+
+  }
+
+
+  // CHECK HEADER WRITE
+
+  bool written = !file.getWriteError();
+
+  file.close();
+
+  if (!written) {
+
+    sdFailure(F("CSV header write failed"));
+
+    return;
+
+  }
+
+
+  // START RECORD ID RECOVERY
+
+  scanOffset = 0;
+
+  scanningSD = true;
+
+  Serial.println(F("[SD] Recovering record IDs"));
+
+}
+
+
+// RECOVER LAST RECORD ID
+
+void scanSD() {
+
+  File file = SD.open(logFile, FILE_READ);
+
+
+  // OPEN FILE AND CONTINUE SCANNING
+
+  if (!file || !file.seek(scanOffset)) {
+
+    if (file) {
+
+      file.close();
+
+    }
+
+    sdFailure(
+      F("Record recovery open/seek failed")
+    );
+
+    return;
+
+  }
+
+  unsigned long started = millis();
+
+  char row[112];
+
+
+  // SCAN RECORDS IN SMALL TIME SLICES
+
+  while (
+    file.available() &&
+    millis() - started < 15UL
+  ) {
+
+    if (!readRow(file, row, sizeof(row))) {
+
+      break;
+
+    }
+
+    unsigned long id = rowId(row);
+
+    if (id > recordId) {
+
+      recordId = id;
+
+    }
+
+  }
+
+
+  // SAVE CURRENT SCAN POSITION
+
+  scanOffset = file.position();
+
+
+  // CONTINUE RECOVERY ON NEXT LOOP
+
+  if (file.available()) {
+
+    file.close();
+
+    return;
+
+  }
+
+
+  // CHECK IF FINAL ROW HAS A NEWLINE
+
+  bool needsNewline = false;
+
+  if (file.size() > 0) {
+
+    if (!file.seek(file.size() - 1)) {
+
+      file.close();
+
+      sdFailure(
+        F("Cannot check final CSV row")
+      );
+
+      return;
+
+    }
+
+    needsNewline = file.read() != '\n';
+
+  }
+
+  file.close();
+
+
+  // REPAIR MISSING FINAL NEWLINE
+
+  if (needsNewline) {
+
+    file = SD.open(logFile, FILE_WRITE);
+
+    if (!file) {
+
+      sdFailure(
+        F("Cannot reopen CSV for repair")
+      );
+
+      return;
+
+    }
+
+    file.println();
+
+    bool written = !file.getWriteError();
+
+    file.close();
+
+    if (!written) {
+
+      sdFailure(F("CSV repair write failed"));
+
+      return;
+
+    }
+
+  }
+
+
+  // SD CARD IS READY FOR LOGGING
+
+  scanningSD = false;
+
+  sdReady = true;
+
+  Serial.print(F("[SD] Ready. Last record: "));
+
+  Serial.println(recordId);
+
+}
+
+
+// CHECK SD CARD CONNECTION
+
+void checkSD() {
+
+  // DO NOT INTERRUPT RECORD RECOVERY
+
+  if (scanningSD) return;
+
+
+  // RETRY FAILED INITIALIZATION
+
+  if (!sdReady) {
+
+    startSD();
+
+    return;
+
+  }
+
+
+  // CHECK IF CSV FILE CAN STILL BE OPENED
+
+  File file = SD.open(logFile, FILE_READ);
+
+  if (!file) {
+
+    sdFailure(
+      F("Card check could not open HYGIENE.CSV")
+    );
+
+    return;
+
+  }
+
+  file.close();
+
+}
+
+
+// PREPARE SENSOR DATA
 
 void writeReadings(
   Print &output,
@@ -213,7 +618,7 @@ void writeReadings(
 ) {
 
 
-  // UPTIME
+  // UPTIME IN SECONDS
 
   output.print(millis() / 1000);
 
@@ -227,15 +632,19 @@ void writeReadings(
   output.print(',');
 
 
-  // LOAD CELL READING
+  // LOAD CELL WEIGHT
 
   if (sensors.weightReady()) {
 
     output.print(sensors.weight(), 1);
 
-  } else {
+  } else if (live) {
 
     output.print(-999);
+
+  } else {
+
+    output.print(F("ERR"));
 
   }
 
@@ -264,26 +673,27 @@ void writeReadings(
 
 
   // PUMP STATUS
+  // DISPENSING LOGS RECORD PUMP AS ON
 
   output.print(pumpOn || dispensed);
 
   output.print(',');
 
 
-  // OPERATING MODE
-  // AUTO = 0
-  // MAINTENANCE = 1
+  // INCLUDE MODE ONLY IN LIVE DATA
 
   if (live) {
 
-    output.print(currentMode == MAINTENANCE);
+    output.print(
+      currentMode == MAINTENANCE
+    );
 
     output.print(',');
 
   }
 
 
-  // NON-CONTACT LIQUID LEVEL
+  // NON-CONTACT LEVEL
 
   output.print(sensors.liquidLevel());
 
@@ -292,7 +702,38 @@ void writeReadings(
 
   // WEIGHT STATUS
 
-  output.println(sensors.weightStatus());
+  output.print(sensors.weightStatus());
+
+
+  // INCLUDE EVENT ONLY IN SD LOGS
+
+  if (!live) {
+
+    output.print(',');
+
+    if (!dispensed) {
+
+      output.println(F("PERIODIC"));
+
+    } else if (dispenseEvent == 2) {
+
+      output.println(
+        F("MAINTENANCE_DISPENSE")
+      );
+
+    } else {
+
+      output.println(
+        F("AUTO_DISPENSE")
+      );
+
+    }
+
+  } else {
+
+    output.println();
+
+  }
 
 }
 
@@ -302,6 +743,169 @@ void writeReadings(
 void sendLiveData() {
 
   communication.live(writeReadings);
+
+}
+
+
+// SAVE SENSOR DATA TO SD CARD
+
+void saveData(bool dispensed) {
+
+  if (!sdReady || recordId == ULONG_MAX) {
+
+    return;
+
+  }
+
+
+  // OPEN CSV FILE IN APPEND MODE
+
+  File file = SD.open(logFile, FILE_WRITE);
+
+  if (!file) {
+
+    sdFailure(F("Cannot open CSV for logging"));
+
+    return;
+
+  }
+
+
+  // WRITE NEXT RECORD ID
+
+  file.print(recordId + 1);
+
+  file.print(',');
+
+
+  // WRITE SENSOR DATA
+
+  writeReadings(file, false, dispensed);
+
+
+  // FLUSH FILE DATA
+
+  file.flush();
+
+
+  // CHECK WRITE RESULT
+
+  bool saved = !file.getWriteError();
+
+  file.close();
+
+
+  // UPDATE RECORD ID AFTER SUCCESSFUL WRITE
+
+  if (saved) {
+
+    recordId++;
+
+    Serial.print(F("[SD] Saved record "));
+
+    Serial.println(recordId);
+
+  } else {
+
+    sdFailure(F("Record write failed"));
+
+  }
+
+}
+
+
+// SAVE DISPENSING EVENT
+
+void saveDispenseData() {
+
+  if (
+    !dispenseCompleted ||
+    pumpOn ||
+    !sdReady
+  ) return;
+
+
+  // REQUEST FRESH SENSOR READINGS
+  // AFTER DISPENSING
+
+  if (!dispenseReading) {
+
+    if (sensors.isTaring()) return;
+
+    sensors.requestRead();
+
+    dispenseReading = true;
+
+    return;
+
+  }
+
+
+  // WAIT UNTIL SENSOR READING IS COMPLETE
+
+  if (!sensors.readingDone()) return;
+
+
+  // STORE PREVIOUS RECORD ID
+
+  unsigned long previousId = recordId;
+
+
+  // SAVE DISPENSING RECORD
+
+  saveData(true);
+
+
+  // CHECK IF RECORD WAS SAVED
+
+  if (recordId > previousId) {
+
+    dispenseCompleted = false;
+
+    dispenseReading = false;
+
+    Serial.println(F("[DISPENSE] Data saved"));
+
+  }
+
+}
+
+
+// SAVE PERIODIC SENSOR DATA
+
+void savePeriodicData() {
+
+  if (
+    pumpOn ||
+    !sdReady ||
+    sensors.isTaring() ||
+    dispenseCompleted
+  ) return;
+
+
+  // SAVE EVERY THREE MINUTES
+
+  if (millis() - lastLog < logTime) {
+
+    return;
+
+  }
+
+  unsigned long previousId = recordId;
+
+
+  // SAVE CURRENT SENSOR READINGS
+
+  saveData(false);
+
+
+  // UPDATE TIMER AFTER SUCCESSFUL LOGGING
+
+  if (recordId > previousId) {
+
+    lastLog = millis();
+
+  }
 
 }
 
@@ -333,12 +937,12 @@ void changeMode(Mode next) {
     }
 
 
-    // UPDATE CURRENT MODE
+    // UPDATE OPERATING MODE
 
     currentMode = next;
 
 
-    // RESET AUTOMATIC HAND DETECTION
+    // RESET HAND DETECTION
 
     pumpTriggered = true;
 
@@ -350,16 +954,13 @@ void changeMode(Mode next) {
     manualReading = false;
 
 
-    // IMMEDIATELY UPDATE AUTO MODE
+    // UPDATE AUTO MODE IMMEDIATELY
 
     if (next == AUTO) {
 
       lastLive = millis() - liveTime;
 
     }
-
-
-    // REQUEST LIVE STATUS TRANSMISSION
 
     modeLivePending = true;
 
@@ -400,11 +1001,7 @@ void maintenanceCommand(
   Communication::Command command
 ) {
 
-  // ONLY ACCEPT MANUAL COMMANDS
-  // WHEN MAINTENANCE MODE IS ACTIVE
-
   if (currentMode != MAINTENANCE) return;
-
 
   switch (command) {
 
@@ -419,7 +1016,9 @@ void maintenanceCommand(
 
         manualReading = true;
 
-        Serial.println(F("[MAINT] Reading sensors"));
+        Serial.println(
+          F("[MAINT] Reading sensors")
+        );
 
       }
 
@@ -443,16 +1042,15 @@ void maintenanceCommand(
 
       }
 
-
-      // REQUEST LOAD CELL TARE
-
       manualReading = false;
 
       sensors.requestTare();
 
       manualTare = true;
 
-      Serial.println(F("[MAINT] Taring load cell"));
+      Serial.println(
+        F("[MAINT] Taring load cell")
+      );
 
       break;
 
@@ -461,17 +1059,15 @@ void maintenanceCommand(
 
     case Communication::PUMP1:
 
-      if (!pumpOn && !sensors.isTaring()) {
+      if (
+        !pumpOn &&
+        !sensors.isTaring() &&
+        !(dispenseCompleted && sdReady)
+      ) {
 
         turnPumpOn();
 
-
-        // CONFIRM PUMP ACTIVATION
-
         communication.ack(F("PUMP1"));
-
-
-        // TRANSMIT UPDATED PUMP STATUS
 
         sendLiveData();
 
@@ -513,7 +1109,7 @@ void processCommand(
       break;
 
 
-    // SWITCH TO AUTO MODE
+    // AUTOMATIC MODE
 
     case Communication::AUTO:
 
@@ -522,7 +1118,7 @@ void processCommand(
       break;
 
 
-    // SWITCH TO MAINTENANCE MODE
+    // MAINTENANCE MODE
 
     case Communication::MAINT:
 
@@ -546,8 +1142,8 @@ void processCommand(
 
     default:
 
-      // SD CARD AND SLEEP COMMANDS
-      // WILL BE IMPLEMENTED LATER.
+      // RECORD RETRIEVAL, HISTORY AND SLEEP
+      // WILL BE IMPLEMENTED IN LATER COMMITS.
 
       break;
 
@@ -560,15 +1156,12 @@ void processCommand(
 
 void serviceSensorRequests() {
 
-
-  // CHECK LOAD CELL TARE RESULT
-
   byte result = sensors.takeTareResult();
 
+
+  // CHECK TARE RESULT
+
   if (result) {
-
-
-    // MANUAL TARE REQUEST
 
     if (manualTare) {
 
@@ -581,10 +1174,9 @@ void serviceSensorRequests() {
 
         communication.ack(F("TARE"));
 
-        Serial.println(F("[HX711] Tare successful"));
-
-
-        // COLLECT NEW SENSOR READINGS
+        Serial.println(
+          F("[HX711] Tare successful")
+        );
 
         sensors.requestRead();
 
@@ -597,9 +1189,13 @@ void serviceSensorRequests() {
 
       else {
 
-        communication.output().println(F("ERR,HX711"));
+        communication.output().println(
+          F("ERR,HX711")
+        );
 
-        Serial.println(F("[HX711] Tare timeout"));
+        Serial.println(
+          F("[HX711] Tare timeout")
+        );
 
       }
 
@@ -614,7 +1210,9 @@ void serviceSensorRequests() {
 
     } else if (result == 1) {
 
-      Serial.println(F("[HX711] Startup tare successful"));
+      Serial.println(
+        F("[HX711] Startup tare successful")
+      );
 
     }
 
@@ -627,12 +1225,11 @@ void serviceSensorRequests() {
 
     manualReading = false;
 
-
-    // SEND FRESH SENSOR READINGS
-
     sendLiveData();
 
-    Serial.println(F("[MAINT] Sensor readings sent"));
+    Serial.println(
+      F("[MAINT] Sensor readings sent")
+    );
 
   }
 
@@ -686,7 +1283,7 @@ void displayReadings() {
   Serial.println(sensors.nearObject());
 
 
-  // LOAD CELL READING
+  // LOAD CELL WEIGHT
 
   Serial.print(F("Weight: "));
 
@@ -735,7 +1332,37 @@ void displayReadings() {
 
   Serial.print(F("Pump: "));
 
-  Serial.println(pumpOn ? F("ON") : F("OFF"));
+  Serial.println(
+
+    pumpOn ? F("ON") : F("OFF")
+
+  );
+
+
+  // SD CARD STATUS
+
+  Serial.print(F("SD: "));
+
+  if (scanningSD) {
+
+    Serial.println(F("RECOVERING"));
+
+  } else if (sdReady) {
+
+    Serial.println(F("READY"));
+
+  } else {
+
+    Serial.println(F("ERROR"));
+
+  }
+
+
+  // LAST SAVED RECORD
+
+  Serial.print(F("Last record: "));
+
+  Serial.println(recordId);
 
 }
 
@@ -745,7 +1372,7 @@ void displayReadings() {
 void autoMode() {
 
 
-  // CONTINUOUS SENSOR READINGS
+  // CONTINUOUS SENSOR SAMPLING
 
   sensors.update(!pumpOn, true);
 
@@ -755,7 +1382,7 @@ void autoMode() {
   checkPumpTime();
 
 
-  // PROCESS PENDING SENSOR REQUESTS
+  // PROCESS SENSOR REQUESTS
 
   serviceSensorRequests();
 
@@ -765,16 +1392,13 @@ void autoMode() {
   automaticPump();
 
 
-  // TRANSMIT LIVE DATA EVERY TWO SECONDS
+  // SEND LIVE DATA EVERY TWO SECONDS
 
   if (millis() - lastLive >= liveTime) {
 
     lastLive = millis();
 
     sendLiveData();
-
-
-    // DISPLAY READINGS WHEN PUMP IS OFF
 
     if (!pumpOn) {
 
@@ -783,6 +1407,11 @@ void autoMode() {
     }
 
   }
+
+
+  // SAVE PERIODIC SENSOR DATA
+
+  savePeriodicData();
 
 }
 
@@ -793,12 +1422,12 @@ void maintenanceMode() {
 
 
   // DISABLE AUTOMATIC HAND DETECTION
-  // DISABLE CONTINUOUS SENSOR SAMPLING
+  // AND CONTINUOUS SENSOR SAMPLING
 
   sensors.update(false, false);
 
 
-  // PROCESS MANUAL READ AND TARE REQUESTS
+  // PROCESS MANUAL AND DISPENSING READINGS
 
   serviceSensorRequests();
 
@@ -806,6 +1435,44 @@ void maintenanceMode() {
   // CHECK MANUAL PUMP TIMER
 
   checkPumpTime();
+
+}
+
+
+// SERVICE SD CARD
+
+void serviceSD() {
+
+
+  // DO NOT PERFORM SD OPERATIONS
+  // WHILE THE PUMP IS ACTIVE
+
+  if (pumpOn) return;
+
+
+  // CONTINUE RECORD ID RECOVERY
+
+  if (scanningSD) {
+
+    scanSD();
+
+  }
+
+
+  // CHECK SD CARD EVERY TEN SECONDS
+
+  if (millis() - lastSd >= sdTime) {
+
+    lastSd = millis();
+
+    checkSD();
+
+  }
+
+
+  // SAVE COMPLETED DISPENSING EVENT
+
+  saveDispenseData();
 
 }
 
@@ -829,7 +1496,6 @@ void setup() {
 
   communication.begin(9600);
 
-
   Serial.println(F("=== HYGIENEMIST ==="));
 
 
@@ -838,17 +1504,28 @@ void setup() {
   sensors.begin();
 
 
+  // INITIALIZE SD CARD
+
+  startSD();
+
+
   // DEFAULT OPERATING MODE
 
   currentMode = AUTO;
 
 
-  // NOTIFY ESP-01 OF ARDUINO STARTUP
+  // NOTIFY ESP-01 OF STARTUP
 
   communication.output().println(F("BOOT"));
 
 
+  // INITIALIZE TIMERS
+
   lastLive = millis();
+
+  lastLog = millis();
+
+  lastSd = millis();
 
 }
 
@@ -870,10 +1547,9 @@ void loop() {
   checkPumpTime();
 
 
-  // EXECUTE CURRENT OPERATING MODE
+  // EXECUTE CURRENT MODE
 
   switch (currentMode) {
-
 
     case AUTO:
 
@@ -891,7 +1567,7 @@ void loop() {
   }
 
 
-  // TRANSMIT STATUS AFTER MODE CHANGE
+  // SEND STATUS AFTER MODE CHANGE
 
   if (modeLivePending) {
 
@@ -905,6 +1581,11 @@ void loop() {
   // RECEIVE ADDITIONAL COMMANDS
 
   communication.update(processCommand);
+
+
+  // PROCESS SD CARD TASKS
+
+  serviceSD();
 
 
   // FINAL PUMP TIMER CHECK
