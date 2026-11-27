@@ -1,6 +1,6 @@
 #include <Arduino.h>
 #include "Sensors.h"
-
+#include "Communication.h"
 
 // PIN ASSIGNMENTS
 
@@ -13,9 +13,11 @@ const byte espTx = 8;
 const byte sdPin = 10;
 
 
-// SENSOR OBJECT
+// SENSOR AND COMMUNICATION OBJECTS
 
 Sensors sensors;
+
+Communication communication(espRx, espTx);
 
 
 // TIMING SETTINGS
@@ -34,6 +36,21 @@ bool pumpTriggered = true;
 
 unsigned long pumpStart = 0;
 unsigned long lastLive = 0;
+
+
+// FUNCTION DECLARATIONS
+
+void checkPumpTime();
+
+void sendLiveData();
+
+void processCommand(
+  Communication::Command command,
+  unsigned long a,
+  unsigned long b,
+  byte kind,
+  const char *text
+);
 
 
 // INITIALIZE HARDWARE
@@ -86,22 +103,13 @@ void turnPumpOff() {
 
 void automaticPump() {
 
-  // Prevent activation while dispensing or taring.
-
   if (pumpOn || sensors.isTaring()) return;
-
-
-  // Allow another dispensing cycle
-  // after the hand is removed.
 
   if (sensors.handRemoved()) {
 
     pumpTriggered = false;
 
   }
-
-
-  // Activate pump when a hand is detected.
 
   if (
 
@@ -132,14 +140,154 @@ void checkPumpTime() {
 
   if (millis() - pumpStart < pumpTime) return;
 
-
-  // Turn off the pump after three seconds.
-
   turnPumpOff();
 
   sensors.resetDetection();
 
   Serial.println(F("[PUMP] OFF - timeout"));
+
+}
+
+
+// PREPARE LIVE SENSOR DATA
+
+void writeReadings(
+  Print &output,
+  bool live,
+  bool dispensed
+) {
+
+  // UPTIME IN SECONDS
+
+  output.print(millis() / 1000);
+
+  output.print(',');
+
+
+  // ADJUSTED ULTRASONIC DISTANCE
+
+  output.print(sensors.adjustedDistance());
+
+  output.print(',');
+
+
+  // LOAD CELL WEIGHT
+
+  if (sensors.weightReady()) {
+
+    output.print(sensors.weight(), 1);
+
+  } else {
+
+    output.print(-999);
+
+  }
+
+  output.print(',');
+
+
+  // OBJECT DETECTION
+
+  output.print(sensors.nearObject());
+
+  output.print(',');
+
+
+  // NON-CONTACT SENSOR 1
+
+  output.print(sensors.nonContact1());
+
+  output.print(',');
+
+
+  // NON-CONTACT SENSOR 2
+
+  output.print(sensors.nonContact2());
+
+  output.print(',');
+
+
+  // PUMP STATUS
+
+  output.print(pumpOn || dispensed);
+
+  output.print(',');
+
+
+  // OPERATING MODE
+  // AUTO = 0
+
+  output.print(0);
+
+  output.print(',');
+
+
+  // NON-CONTACT LIQUID LEVEL
+
+  output.print(sensors.liquidLevel());
+
+  output.print(',');
+
+
+  // WEIGHT STATUS
+
+  output.println(sensors.weightStatus());
+
+}
+
+
+// SEND LIVE DATA TO ESP-01
+
+void sendLiveData() {
+
+  communication.live(writeReadings);
+
+}
+
+
+// PROCESS RECEIVED COMMANDS
+
+void processCommand(
+  Communication::Command command,
+  unsigned long a,
+  unsigned long b,
+  byte kind,
+  const char *text
+) {
+
+  switch (command) {
+
+    case Communication::IP:
+
+      Serial.print(F("[ESP] IP Address: "));
+
+      Serial.println(text);
+
+      break;
+
+
+    case Communication::AUTO:
+
+      // AUTO is the only operating mode
+      // implemented at this stage.
+
+      communication.ack(F("AUTO"));
+
+      Serial.println(F("[MODE] AUTO"));
+
+      sendLiveData();
+
+      break;
+
+
+    default:
+
+      // Other commands will be implemented
+      // in the succeeding commits.
+
+      break;
+
+  }
 
 }
 
@@ -150,17 +298,12 @@ void displayReadings() {
 
   Serial.println(F("-------------------------"));
 
-
-  // ULTRASONIC DISTANCE
-
   Serial.print(F("Distance: "));
 
   Serial.print(sensors.distance());
 
   Serial.println(F(" mm"));
 
-
-  // ADJUSTED DISTANCE
 
   Serial.print(F("Adjusted distance: "));
 
@@ -169,14 +312,10 @@ void displayReadings() {
   Serial.println(F(" mm"));
 
 
-  // OBJECT DETECTION
-
   Serial.print(F("Object detected: "));
 
   Serial.println(sensors.nearObject());
 
-
-  // LOAD CELL WEIGHT
 
   Serial.print(F("Weight: "));
 
@@ -193,35 +332,25 @@ void displayReadings() {
   }
 
 
-  // NON-CONTACT SENSOR 1
-
   Serial.print(F("Non-contact 1: "));
 
   Serial.println(sensors.nonContact1());
 
-
-  // NON-CONTACT SENSOR 2
 
   Serial.print(F("Non-contact 2: "));
 
   Serial.println(sensors.nonContact2());
 
 
-  // NON-CONTACT LEVEL
-
   Serial.print(F("Non-contact level: "));
 
   Serial.println(sensors.liquidLevel());
 
 
-  // WEIGHT STATUS
-
   Serial.print(F("Weight status: "));
 
   Serial.println(sensors.weightStatus());
 
-
-  // PUMP STATUS
 
   Serial.print(F("Pump: "));
 
@@ -253,32 +382,22 @@ void checkTare() {
 
 void autoMode() {
 
-  // Disable hand detection while the pump is running.
-  // Continue updating sensor readings.
-
   sensors.update(!pumpOn, true);
-
-
-  // Check the pump timer.
 
   checkPumpTime();
 
-
-  // Check the load cell tare result.
-
   checkTare();
-
-
-  // Check for automatic dispensing.
 
   automaticPump();
 
 
-  // Display sensor readings every two seconds.
+  // SEND LIVE DATA EVERY TWO SECONDS
 
   if (millis() - lastLive >= liveTime) {
 
     lastLive = millis();
+
+    sendLiveData();
 
     if (!pumpOn) {
 
@@ -297,11 +416,29 @@ void setup() {
 
   initializePins();
 
+
+  // HARDWARE SERIAL
+
   Serial.begin(9600);
+
+
+  // SOFTWARE SERIAL
+
+  communication.begin(9600);
+
 
   Serial.println(F("=== HYGIENEMIST ==="));
 
+
+  // INITIALIZE SENSORS
+
   sensors.begin();
+
+
+  // INFORM ESP-01 THAT ARDUINO HAS STARTED
+
+  communication.output().println(F("BOOT"));
+
 
   lastLive = millis();
 
@@ -314,7 +451,22 @@ void loop() {
 
   checkPumpTime();
 
+
+  // RECEIVE ESP-01 COMMANDS
+
+  communication.update(processCommand);
+
+  checkPumpTime();
+
+
+  // AUTOMATIC OPERATION
+
   autoMode();
+
+
+  // CHECK FOR ADDITIONAL COMMANDS
+
+  communication.update(processCommand);
 
   checkPumpTime();
 
