@@ -12,10 +12,8 @@
 
 const byte wakePin = 3;
 const byte pumpPin = 7;
-
 const byte espRx = 9;
 const byte espTx = 8;
-
 const byte sdPin = 10;
 
 
@@ -42,10 +40,8 @@ Communication communication(espRx, espTx);
 // OPERATING MODES
 
 enum Mode {
-
   AUTO,
   MAINTENANCE
-
 };
 
 Mode currentMode = AUTO;
@@ -56,15 +52,11 @@ Mode currentMode = AUTO;
 bool sdReady = false;
 bool scanningSD = false;
 
-unsigned long recordId = 0;
-unsigned long scanOffset = 0;
-
 
 // PUMP VARIABLES
 
 bool pumpOn = false;
 bool pumpTriggered = true;
-
 bool dispenseCompleted = false;
 bool dispenseReading = false;
 
@@ -76,7 +68,6 @@ byte pumpEvent = 0;
 
 bool manualReading = false;
 bool manualTare = false;
-
 bool modeLivePending = false;
 
 
@@ -86,6 +77,46 @@ unsigned long pumpStart = 0;
 unsigned long lastLive = 0;
 unsigned long lastLog = 0;
 unsigned long lastSd = 0;
+
+
+// RECORD ID VARIABLES
+
+unsigned long recordId = 0;
+unsigned long firebaseId = 0;
+unsigned long scanOffset = 0;
+
+
+// RECORD LOOKUP VARIABLES
+
+unsigned long lookupOffset = 0;
+unsigned long lookupId = 0;
+
+unsigned long lastFoundId = 0;
+unsigned long lastFoundEnd = 0;
+
+unsigned long nextAvailableId = 0;
+
+
+// SD PAGINATION VARIABLES
+
+struct PageJob {
+
+  bool active = false;
+  bool sending = false;
+  bool more = false;
+
+  byte count = 0;
+  byte next = 0;
+  byte sent = 0;
+
+  unsigned long ticket = 0;
+  unsigned long before = 0;
+  unsigned long offset = 0;
+  unsigned long end = 0;
+
+  unsigned long offsets[5];
+
+} page;
 
 
 // FUNCTION DECLARATIONS
@@ -110,17 +141,14 @@ void processCommand(
 void initializePins() {
 
   digitalWrite(pumpPin, HIGH);
-
   pinMode(pumpPin, OUTPUT);
 
   pinMode(wakePin, INPUT);
 
   pinMode(SS, OUTPUT);
-
   digitalWrite(SS, HIGH);
 
   pinMode(sdPin, OUTPUT);
-
   digitalWrite(sdPin, HIGH);
 
 }
@@ -132,13 +160,9 @@ void turnPumpOn() {
 
   if (pumpOn) return;
 
-  // 1 = AUTO DISPENSE
-  // 2 = MAINTENANCE DISPENSE
-
   pumpEvent = currentMode == MAINTENANCE ? 2 : 1;
 
   pumpOn = true;
-
   pumpStart = millis();
 
   digitalWrite(pumpPin, LOW);
@@ -169,17 +193,11 @@ void automaticPump() {
     (dispenseCompleted && sdReady)
   ) return;
 
-
-  // REARM AFTER HAND REMOVAL
-
   if (sensors.handRemoved()) {
 
     pumpTriggered = false;
 
   }
-
-
-  // DETECT HAND AND ACTIVATE PUMP
 
   if (
     !pumpTriggered &&
@@ -202,30 +220,21 @@ void automaticPump() {
 
 void checkPumpTime() {
 
-  if (!pumpOn) return;
+  if (!pumpOn || millis() - pumpStart < pumpTime) {
 
-  if (millis() - pumpStart < pumpTime) return;
+    return;
 
-
-  // STOP PUMP
+  }
 
   turnPumpOff();
 
   sensors.resetDetection();
 
-
-  // MARK DISPENSING EVENT FOR SD LOGGING
-
   dispenseCompleted = true;
-
   dispenseEvent = pumpEvent;
-
   dispenseReading = false;
 
   Serial.println(F("[PUMP] OFF - timeout"));
-
-
-  // CONFIRM MANUAL DISPENSING COMPLETED
 
   if (pumpEvent == 2) {
 
@@ -287,11 +296,9 @@ bool readRow(
 }
 
 
-// EXTRACT RECORD ID FROM CSV ROW
+// EXTRACT RECORD ID FROM CSV
 
 unsigned long rowId(const char *row) {
-
-  // IGNORE HEADER OR INVALID ROW
 
   if (*row < '0' || *row > '9') {
 
@@ -305,23 +312,15 @@ unsigned long rowId(const char *row) {
 
   if (*end != ',') return 0;
 
-
-  // VALIDATE NUMBER OF CSV FIELDS
-
   int commas = 0;
 
   for (; *row; row++) {
 
-    if (*row == ',') {
-
-      commas++;
-
-    }
+    if (*row == ',') commas++;
 
   }
 
-
-  // SUPPORT ORIGINAL AND LEGACY RECORDS
+  // SUPPORT CURRENT AND LEGACY CSV RECORDS
 
   return (commas == 9 || commas == 10)
     ? id
@@ -337,14 +336,21 @@ void sdFailure(
 ) {
 
   sdReady = false;
-
   scanningSD = false;
 
   lastSd = millis();
 
   Serial.print(F("[SD] ERROR: "));
-
   Serial.println(reason);
+
+}
+
+
+// CHECK WHETHER SD CAN BE READ
+
+bool sdReadable() {
+
+  return sdReady || scanningSD;
 
 }
 
@@ -354,15 +360,11 @@ void sdFailure(
 void startSD() {
 
   sdReady = false;
-
   scanningSD = false;
 
   Serial.println(F("[SD] Initializing..."));
 
   digitalWrite(sdPin, HIGH);
-
-
-  // CHECK SD CARD INITIALIZATION
 
   if (!SD.begin(sdPin)) {
 
@@ -373,9 +375,6 @@ void startSD() {
   }
 
   Serial.println(F("[SD] Card initialized"));
-
-
-  // OPEN OR CREATE CSV FILE
 
   File file = SD.open(logFile, FILE_WRITE);
 
@@ -390,7 +389,7 @@ void startSD() {
   }
 
 
-  // CREATE HEADER IF FILE IS EMPTY
+  // CREATE CSV HEADER
 
   if (file.size() == 0) {
 
@@ -401,9 +400,6 @@ void startSD() {
     ));
 
   }
-
-
-  // CHECK HEADER WRITE
 
   bool written = !file.getWriteError();
 
@@ -418,33 +414,38 @@ void startSD() {
   }
 
 
-  // START RECORD ID RECOVERY
+  // RESET RECORD LOOKUP VARIABLES
 
   scanOffset = 0;
+  lookupOffset = 0;
+  lookupId = 0;
+
+  nextAvailableId = 0;
+
+  lastFoundId = 0;
+  lastFoundEnd = 0;
+
+
+  // START RECORD ID RECOVERY
 
   scanningSD = true;
 
-  Serial.println(F("[SD] Recovering record IDs"));
+  Serial.println(
+    F("[SD] Recovering record IDs; history can be read")
+  );
 
 }
 
 
-// RECOVER LAST RECORD ID
+// RECOVER RECORD IDS
 
 void scanSD() {
 
   File file = SD.open(logFile, FILE_READ);
 
-
-  // OPEN FILE AND CONTINUE SCANNING
-
   if (!file || !file.seek(scanOffset)) {
 
-    if (file) {
-
-      file.close();
-
-    }
+    if (file) file.close();
 
     sdFailure(
       F("Record recovery open/seek failed")
@@ -483,12 +484,9 @@ void scanSD() {
   }
 
 
-  // SAVE CURRENT SCAN POSITION
+  // SAVE SCAN POSITION
 
   scanOffset = file.position();
-
-
-  // CONTINUE RECOVERY ON NEXT LOOP
 
   if (file.available()) {
 
@@ -499,7 +497,7 @@ void scanSD() {
   }
 
 
-  // CHECK IF FINAL ROW HAS A NEWLINE
+  // CHECK FINAL CSV NEWLINE
 
   bool needsNewline = false;
 
@@ -524,7 +522,7 @@ void scanSD() {
   file.close();
 
 
-  // REPAIR MISSING FINAL NEWLINE
+  // REPAIR MISSING NEWLINE
 
   if (needsNewline) {
 
@@ -557,14 +555,21 @@ void scanSD() {
   }
 
 
-  // SD CARD IS READY FOR LOGGING
+  // SYNCHRONIZE WITH FIREBASE RECORD ID
+
+  if (firebaseId > recordId) {
+
+    recordId = firebaseId;
+
+  }
+
+
+  // SD CARD READY
 
   scanningSD = false;
-
   sdReady = true;
 
   Serial.print(F("[SD] Ready. Last record: "));
-
   Serial.println(recordId);
 
 }
@@ -574,12 +579,7 @@ void scanSD() {
 
 void checkSD() {
 
-  // DO NOT INTERRUPT RECORD RECOVERY
-
   if (scanningSD) return;
-
-
-  // RETRY FAILED INITIALIZATION
 
   if (!sdReady) {
 
@@ -588,9 +588,6 @@ void checkSD() {
     return;
 
   }
-
-
-  // CHECK IF CSV FILE CAN STILL BE OPENED
 
   File file = SD.open(logFile, FILE_READ);
 
@@ -617,22 +614,19 @@ void writeReadings(
   bool dispensed
 ) {
 
-
-  // UPTIME IN SECONDS
+  // UPTIME
 
   output.print(millis() / 1000);
-
   output.print(',');
 
 
-  // ADJUSTED ULTRASONIC DISTANCE
+  // ULTRASONIC DISTANCE
 
   output.print(sensors.adjustedDistance());
-
   output.print(',');
 
 
-  // LOAD CELL WEIGHT
+  // LOAD CELL
 
   if (sensors.weightReady()) {
 
@@ -654,39 +648,32 @@ void writeReadings(
   // OBJECT DETECTION
 
   output.print(sensors.nearObject());
-
   output.print(',');
 
 
   // NON-CONTACT SENSOR 1
 
   output.print(sensors.nonContact1());
-
   output.print(',');
 
 
   // NON-CONTACT SENSOR 2
 
   output.print(sensors.nonContact2());
-
   output.print(',');
 
 
   // PUMP STATUS
-  // DISPENSING LOGS RECORD PUMP AS ON
 
   output.print(pumpOn || dispensed);
-
   output.print(',');
 
 
-  // INCLUDE MODE ONLY IN LIVE DATA
+  // OPERATING MODE FOR LIVE DATA
 
   if (live) {
 
-    output.print(
-      currentMode == MAINTENANCE
-    );
+    output.print(currentMode == MAINTENANCE);
 
     output.print(',');
 
@@ -696,7 +683,6 @@ void writeReadings(
   // NON-CONTACT LEVEL
 
   output.print(sensors.liquidLevel());
-
   output.print(',');
 
 
@@ -705,7 +691,7 @@ void writeReadings(
   output.print(sensors.weightStatus());
 
 
-  // INCLUDE EVENT ONLY IN SD LOGS
+  // EVENT TYPE FOR SD RECORDS
 
   if (!live) {
 
@@ -717,15 +703,11 @@ void writeReadings(
 
     } else if (dispenseEvent == 2) {
 
-      output.println(
-        F("MAINTENANCE_DISPENSE")
-      );
+      output.println(F("MAINTENANCE_DISPENSE"));
 
     } else {
 
-      output.println(
-        F("AUTO_DISPENSE")
-      );
+      output.println(F("AUTO_DISPENSE"));
 
     }
 
@@ -738,7 +720,7 @@ void writeReadings(
 }
 
 
-// SEND LIVE DATA TO ESP-01
+// SEND LIVE SENSOR DATA
 
 void sendLiveData() {
 
@@ -757,9 +739,6 @@ void saveData(bool dispensed) {
 
   }
 
-
-  // OPEN CSV FILE IN APPEND MODE
-
   File file = SD.open(logFile, FILE_WRITE);
 
   if (!file) {
@@ -771,38 +750,31 @@ void saveData(bool dispensed) {
   }
 
 
-  // WRITE NEXT RECORD ID
+  // WRITE NEW RECORD ID
 
   file.print(recordId + 1);
 
   file.print(',');
 
 
-  // WRITE SENSOR DATA
+  // WRITE SENSOR READINGS
 
   writeReadings(file, false, dispensed);
 
-
-  // FLUSH FILE DATA
-
   file.flush();
-
-
-  // CHECK WRITE RESULT
 
   bool saved = !file.getWriteError();
 
   file.close();
 
 
-  // UPDATE RECORD ID AFTER SUCCESSFUL WRITE
+  // UPDATE RECORD ID
 
   if (saved) {
 
     recordId++;
 
     Serial.print(F("[SD] Saved record "));
-
     Serial.println(recordId);
 
   } else {
@@ -826,7 +798,6 @@ void saveDispenseData() {
 
 
   // REQUEST FRESH SENSOR READINGS
-  // AFTER DISPENSING
 
   if (!dispenseReading) {
 
@@ -840,28 +811,18 @@ void saveDispenseData() {
 
   }
 
-
-  // WAIT UNTIL SENSOR READING IS COMPLETE
-
   if (!sensors.readingDone()) return;
 
-
-  // STORE PREVIOUS RECORD ID
-
   unsigned long previousId = recordId;
-
-
-  // SAVE DISPENSING RECORD
 
   saveData(true);
 
 
-  // CHECK IF RECORD WAS SAVED
+  // CHECK SUCCESSFUL LOGGING
 
   if (recordId > previousId) {
 
     dispenseCompleted = false;
-
     dispenseReading = false;
 
     Serial.println(F("[DISPENSE] Data saved"));
@@ -882,9 +843,6 @@ void savePeriodicData() {
     dispenseCompleted
   ) return;
 
-
-  // SAVE EVERY THREE MINUTES
-
   if (millis() - lastLog < logTime) {
 
     return;
@@ -893,13 +851,7 @@ void savePeriodicData() {
 
   unsigned long previousId = recordId;
 
-
-  // SAVE CURRENT SENSOR READINGS
-
   saveData(false);
-
-
-  // UPDATE TIMER AFTER SUCCESSFUL LOGGING
 
   if (recordId > previousId) {
 
@@ -910,25 +862,505 @@ void savePeriodicData() {
 }
 
 
+// RETRIEVE AND SEND SAVED RECORD
+
+void sendRecord(unsigned long wantedId) {
+
+  Serial.print(F("[GET] "));
+  Serial.println(wantedId);
+
+
+  // CHECK IF SYSTEM IS BUSY
+
+  if (pumpOn || scanningSD) {
+
+    communication.output().print(F("BUSY,"));
+
+    communication.output().println(wantedId);
+
+    return;
+
+  }
+
+
+  // CHECK SD CARD
+
+  if (!sdReady) {
+
+    communication.output().println(F("ERR,SD"));
+
+    return;
+
+  }
+
+
+  // VALIDATE REQUESTED ID
+
+  if (wantedId == 0) {
+
+    communication.output().println(F("ERR,ID"));
+
+    return;
+
+  }
+
+
+  // CHECK END OF RECORDS
+
+  if (wantedId > recordId) {
+
+    communication.output().print(F("END,"));
+
+    communication.output().println(wantedId);
+
+    return;
+
+  }
+
+
+  // OPEN CSV FILE
+
+  File file = SD.open(logFile, FILE_READ);
+
+  if (!file) {
+
+    sdFailure(
+      F("Cannot open CSV for record transfer")
+    );
+
+    communication.output().println(F("ERR,SD"));
+
+    return;
+
+  }
+
+
+  // INITIALIZE OR CONTINUE RECORD SEARCH
+
+  if (lookupId != wantedId) {
+
+    lookupId = wantedId;
+
+    nextAvailableId = 0;
+
+    lookupOffset = (wantedId > lastFoundId)
+      ? lastFoundEnd
+      : 0;
+
+  }
+
+
+  // SEEK TO PREVIOUS SEARCH POSITION
+
+  if (!file.seek(lookupOffset)) {
+
+    file.close();
+
+    lookupOffset = 0;
+    lookupId = 0;
+    nextAvailableId = 0;
+
+    sdFailure(F("Record transfer seek failed"));
+
+    communication.output().println(F("ERR,SD"));
+
+    return;
+
+  }
+
+  unsigned long started = millis();
+
+  char row[112];
+
+
+  // SEARCH CSV RECORDS
+
+  while (
+    file.available() &&
+    millis() - started < 15UL
+  ) {
+
+    if (!readRow(file, row, sizeof(row))) {
+
+      break;
+
+    }
+
+    checkPumpTime();
+
+    unsigned long id = rowId(row);
+
+
+    // TRACK NEXT AVAILABLE RECORD
+
+    if (
+      id > wantedId &&
+      (!nextAvailableId || id < nextAvailableId)
+    ) {
+
+      nextAvailableId = id;
+
+    }
+
+
+    // REQUESTED RECORD FOUND
+
+    if (id == wantedId) {
+
+      lastFoundId = wantedId;
+
+      lastFoundEnd = file.position();
+
+      lookupId = 0;
+
+      file.close();
+
+
+      // SEND RECORD WITH CRC CHECKSUM
+
+      communication.record(row);
+
+      Serial.print(F("[SD] Sent record "));
+      Serial.println(wantedId);
+
+      return;
+
+    }
+
+  }
+
+
+  // SAVE CURRENT SEARCH POSITION
+
+  lookupOffset = file.position();
+
+  bool more = file.available();
+
+  file.close();
+
+
+  // REQUEST ESP TO RETRY
+
+  if (more) {
+
+    communication.output().print(F("BUSY,"));
+
+    communication.output().println(wantedId);
+
+    return;
+
+  }
+
+  lookupId = 0;
+
+
+  // HANDLE MISSING RECORD ID
+
+  if (nextAvailableId) {
+
+    communication.output().print(F("NEXT,"));
+
+    communication.output().print(wantedId);
+
+    communication.output().print(',');
+
+    communication.output().println(nextAvailableId);
+
+    Serial.print(F("[SD] Missing ID; next available: "));
+
+    Serial.println(nextAvailableId);
+
+    return;
+
+  }
+
+
+  // NO HIGHER RECORD FOUND
+
+  communication.output().print(F("GAP,"));
+
+  communication.output().println(wantedId);
+
+}
+
+
+// INITIALIZE SD PAGINATION REQUEST
+
+void sendSDPage(
+  unsigned long ticket,
+  unsigned long before
+) {
+
+  // ALLOW READ-ONLY PAGES DURING ID RECOVERY
+
+  if (!sdReadable() || pumpOn) {
+
+    communication.pageError(
+      ticket,
+      pumpOn ? F("BUSY") : F("SD")
+    );
+
+    return;
+
+  }
+
+
+  // IGNORE DUPLICATE ACTIVE REQUEST
+
+  if (
+    page.active &&
+    page.ticket == ticket &&
+    page.before == before
+  ) {
+
+    return;
+
+  }
+
+
+  // OPEN SENSOR CSV FILE
+
+  File file = SD.open(logFile, FILE_READ);
+
+  if (!file) {
+
+    Serial.print(F("[SD] Cannot open page file: "));
+    Serial.println(logFile);
+
+    communication.pageError(ticket, F("SD"));
+
+    return;
+
+  }
+
+
+  // INITIALIZE PAGE JOB
+
+  page.active = true;
+  page.sending = false;
+  page.more = false;
+
+  page.count = 0;
+  page.next = 0;
+  page.sent = 0;
+
+  page.ticket = ticket;
+  page.before = before;
+  page.offset = 0;
+
+  page.end = file.size();
+
+  file.close();
+
+}
+
+
+// PROCESS SD PAGINATION
+
+void servicePage() {
+
+  if (!page.active || pumpOn) {
+
+    return;
+
+  }
+
+
+  // CHECK SD CARD STATUS
+
+  if (!sdReadable()) {
+
+    communication.pageError(page.ticket, F("SD"));
+
+    page.active = false;
+
+    return;
+
+  }
+
+
+  // OPEN SENSOR CSV
+
+  File file = SD.open(logFile, FILE_READ);
+
+  char row[112];
+
+  if (!file) {
+
+    Serial.println(F("[SD] Page read open failed"));
+
+    communication.pageError(page.ticket, F("SD"));
+
+    page.active = false;
+
+    return;
+
+  }
+
+
+  // SCAN PAGE RECORDS
+
+  if (!page.sending) {
+
+    if (!file.seek(page.offset)) {
+
+      file.close();
+
+      Serial.println(F("[SD] Page seek failed"));
+
+      communication.pageError(page.ticket, F("SD"));
+
+      page.active = false;
+
+      return;
+
+    }
+
+    unsigned long started = millis();
+
+
+    // SCAN IN SMALL TIME SLICES
+
+    while (
+      file.position() < page.end &&
+      file.available() &&
+      millis() - started < 15UL
+    ) {
+
+      unsigned long offset = file.position();
+
+      if (!readRow(file, row, sizeof(row))) {
+
+        break;
+
+      }
+
+      if (file.position() > page.end) {
+
+        break;
+
+      }
+
+
+      // VALIDATE RECORD ID AND CURSOR
+
+      unsigned long id = rowId(row);
+
+      if (
+        !id ||
+        (page.before && id >= page.before)
+      ) {
+
+        continue;
+
+      }
+
+
+      // KEEP LAST FIVE MATCHING RECORDS
+
+      page.offsets[page.next] = offset;
+
+      page.next = (page.next + 1) % 5;
+
+      if (page.count < 5) {
+
+        page.count++;
+
+      } else {
+
+        page.more = true;
+
+      }
+
+    }
+
+
+    // STORE SCAN PROGRESS
+
+    page.offset = file.position();
+
+    page.sending =
+      page.offset >= page.end ||
+      !file.available();
+
+    file.close();
+
+    return;
+
+  }
+
+
+  // TRANSMIT PAGE RECORDS
+
+  if (page.sent < page.count) {
+
+    byte index =
+      (page.next + 4 - page.sent) % 5;
+
+
+    // READ REQUESTED RECORD
+
+    if (
+      !file.seek(page.offsets[index]) ||
+      !readRow(file, row, sizeof(row))
+    ) {
+
+      file.close();
+
+      Serial.println(F("[SD] Page row read failed"));
+
+      communication.pageError(page.ticket, F("SD"));
+
+      page.active = false;
+
+      return;
+
+    }
+
+    file.close();
+
+
+    // SEND ONE RECORD WITH CRC CHECKSUM
+    // KIND 0 = SENSOR RECORDS
+
+    communication.pageRow(
+      page.ticket,
+      0,
+      page.offsets[index] + 1,
+      row
+    );
+
+    page.sent++;
+
+    return;
+
+  }
+
+
+  // PAGE TRANSMISSION COMPLETE
+
+  file.close();
+
+  communication.pageEnd(
+    page.ticket,
+    page.more
+  );
+
+  page.active = false;
+
+}
+
+
 // CHANGE OPERATING MODE
 
 void changeMode(Mode next) {
 
   if (currentMode != next) {
 
-
-    // CHECK IF MANUAL PUMP IS ACTIVE
-
     bool manualPumpStopped =
       pumpOn && pumpEvent == 2;
 
-
-    // STOP PUMP BEFORE CHANGING MODE
-
     turnPumpOff();
-
-
-    // CONFIRM MANUAL PUMP STOPPED
 
     if (manualPumpStopped) {
 
@@ -936,25 +1368,13 @@ void changeMode(Mode next) {
 
     }
 
-
-    // UPDATE OPERATING MODE
-
     currentMode = next;
-
-
-    // RESET HAND DETECTION
 
     pumpTriggered = true;
 
     sensors.resetDetection();
 
-
-    // RESET MANUAL SENSOR REQUEST
-
     manualReading = false;
-
-
-    // UPDATE AUTO MODE IMMEDIATELY
 
     if (next == AUTO) {
 
@@ -970,26 +1390,15 @@ void changeMode(Mode next) {
   // SEND MODE ACKNOWLEDGMENT
 
   communication.ack(
-
     next == MAINTENANCE
-
       ? F("MAINT")
-
       : F("AUTO")
-
   );
 
-
-  // DISPLAY CURRENT MODE
-
   Serial.println(
-
     next == MAINTENANCE
-
       ? F("[MODE] MAINTENANCE")
-
       : F("[MODE] AUTO")
-
   );
 
 }
@@ -1030,9 +1439,6 @@ void maintenanceCommand(
     case Communication::TARE:
 
       if (manualTare) break;
-
-
-      // STOP PUMP BEFORE TARING
 
       if (pumpOn) {
 
@@ -1098,12 +1504,43 @@ void processCommand(
   switch (command) {
 
 
+    // RETRIEVE SAVED RECORD
+
+    case Communication::GET:
+
+      sendRecord(a);
+
+      break;
+
+
+    // SYNCHRONIZE FIREBASE RECORD ID
+
+    case Communication::BASE:
+
+      Serial.print(F("[BASE] Firebase cursor: "));
+      Serial.println(a);
+
+      firebaseId = a;
+
+      if (firebaseId > recordId) {
+
+        recordId = firebaseId;
+
+      }
+
+
+      // CONFIRM FIREBASE SYNCHRONIZATION
+
+      communication.ack(F("BASE"));
+
+      break;
+
+
     // RECEIVE ESP-01 IP ADDRESS
 
     case Communication::IP:
 
       Serial.print(F("[ESP] IP Address: "));
-
       Serial.println(text);
 
       break;
@@ -1140,10 +1577,19 @@ void processCommand(
       break;
 
 
+    // SENSOR LOG PAGINATION
+
+    case Communication::SDPAGE:
+
+      sendSDPage(a, b);
+
+      break;
+
+
     default:
 
-      // RECORD RETRIEVAL, HISTORY AND SLEEP
-      // WILL BE IMPLEMENTED IN LATER COMMITS.
+      // SLEEP AND SESSION HISTORY COMMANDS
+      // WILL BE IMPLEMENTED LATER.
 
       break;
 
@@ -1157,9 +1603,6 @@ void processCommand(
 void serviceSensorRequests() {
 
   byte result = sensors.takeTareResult();
-
-
-  // CHECK TARE RESULT
 
   if (result) {
 
@@ -1219,7 +1662,7 @@ void serviceSensorRequests() {
   }
 
 
-  // CHECK MANUAL SENSOR READING
+  // TRANSMIT REQUESTED SENSOR READINGS
 
   if (manualReading && sensors.readingDone()) {
 
@@ -1242,55 +1685,36 @@ void displayReadings() {
 
   Serial.println(F("-------------------------"));
 
-
-  // CURRENT MODE
-
   Serial.print(F("Mode: "));
 
   Serial.println(
-
     currentMode == AUTO
-
       ? F("AUTO")
-
       : F("MAINTENANCE")
-
   );
 
 
-  // ULTRASONIC DISTANCE
+  // ULTRASONIC SENSOR
 
   Serial.print(F("Distance: "));
-
   Serial.print(sensors.distance());
-
   Serial.println(F(" mm"));
-
-
-  // ADJUSTED DISTANCE
 
   Serial.print(F("Adjusted distance: "));
-
   Serial.print(sensors.adjustedDistance());
-
   Serial.println(F(" mm"));
 
-
-  // OBJECT DETECTION
-
   Serial.print(F("Object detected: "));
-
   Serial.println(sensors.nearObject());
 
 
-  // LOAD CELL WEIGHT
+  // LOAD CELL
 
   Serial.print(F("Weight: "));
 
   if (sensors.weightReady()) {
 
     Serial.print(sensors.weight(), 1);
-
     Serial.println(F(" g"));
 
   } else {
@@ -1300,31 +1724,21 @@ void displayReadings() {
   }
 
 
-  // NON-CONTACT SENSOR 1
+  // NON-CONTACT SENSORS
 
   Serial.print(F("Non-contact 1: "));
-
   Serial.println(sensors.nonContact1());
 
-
-  // NON-CONTACT SENSOR 2
-
   Serial.print(F("Non-contact 2: "));
-
   Serial.println(sensors.nonContact2());
 
-
-  // NON-CONTACT LEVEL
-
   Serial.print(F("Non-contact level: "));
-
   Serial.println(sensors.liquidLevel());
 
 
   // WEIGHT STATUS
 
   Serial.print(F("Weight status: "));
-
   Serial.println(sensors.weightStatus());
 
 
@@ -1333,9 +1747,7 @@ void displayReadings() {
   Serial.print(F("Pump: "));
 
   Serial.println(
-
     pumpOn ? F("ON") : F("OFF")
-
   );
 
 
@@ -1358,11 +1770,13 @@ void displayReadings() {
   }
 
 
-  // LAST SAVED RECORD
+  // RECORD IDS
 
   Serial.print(F("Last record: "));
-
   Serial.println(recordId);
+
+  Serial.print(F("Firebase record: "));
+  Serial.println(firebaseId);
 
 }
 
@@ -1371,28 +1785,16 @@ void displayReadings() {
 
 void autoMode() {
 
-
-  // CONTINUOUS SENSOR SAMPLING
-
   sensors.update(!pumpOn, true);
-
-
-  // CHECK PUMP TIMER
 
   checkPumpTime();
 
-
-  // PROCESS SENSOR REQUESTS
-
   serviceSensorRequests();
-
-
-  // AUTOMATIC HAND DETECTION
 
   automaticPump();
 
 
-  // SEND LIVE DATA EVERY TWO SECONDS
+  // PERIODIC LIVE DATA
 
   if (millis() - lastLive >= liveTime) {
 
@@ -1409,7 +1811,7 @@ void autoMode() {
   }
 
 
-  // SAVE PERIODIC SENSOR DATA
+  // PERIODIC SD LOGGING
 
   savePeriodicData();
 
@@ -1420,37 +1822,25 @@ void autoMode() {
 
 void maintenanceMode() {
 
-
-  // DISABLE AUTOMATIC HAND DETECTION
-  // AND CONTINUOUS SENSOR SAMPLING
-
   sensors.update(false, false);
 
-
-  // PROCESS MANUAL AND DISPENSING READINGS
-
   serviceSensorRequests();
-
-
-  // CHECK MANUAL PUMP TIMER
 
   checkPumpTime();
 
 }
 
 
-// SERVICE SD CARD
+// SERVICE SD CARD TASKS
 
 void serviceSD() {
 
-
-  // DO NOT PERFORM SD OPERATIONS
-  // WHILE THE PUMP IS ACTIVE
+  // AVOID SD OPERATIONS DURING DISPENSING
 
   if (pumpOn) return;
 
 
-  // CONTINUE RECORD ID RECOVERY
+  // RECOVER RECORD IDS
 
   if (scanningSD) {
 
@@ -1459,7 +1849,7 @@ void serviceSD() {
   }
 
 
-  // CHECK SD CARD EVERY TEN SECONDS
+  // PERIODIC SD CARD CHECK
 
   if (millis() - lastSd >= sdTime) {
 
@@ -1470,9 +1860,14 @@ void serviceSD() {
   }
 
 
-  // SAVE COMPLETED DISPENSING EVENT
+  // SAVE DISPENSING RECORDS
 
   saveDispenseData();
+
+
+  // PROCESS SD PAGE REQUEST
+
+  servicePage();
 
 }
 
@@ -1480,9 +1875,6 @@ void serviceSD() {
 // SETUP
 
 void setup() {
-
-
-  // INITIALIZE HARDWARE
 
   initializePins();
 
@@ -1522,9 +1914,7 @@ void setup() {
   // INITIALIZE TIMERS
 
   lastLive = millis();
-
   lastLog = millis();
-
   lastSd = millis();
 
 }
@@ -1534,20 +1924,17 @@ void setup() {
 
 void loop() {
 
-
-  // CHECK PUMP TIMER
-
   checkPumpTime();
 
 
-  // RECEIVE ESP-01 COMMANDS
+  // RECEIVE ESP COMMANDS
 
   communication.update(processCommand);
 
   checkPumpTime();
 
 
-  // EXECUTE CURRENT MODE
+  // EXECUTE OPERATING MODE
 
   switch (currentMode) {
 
@@ -1556,7 +1943,6 @@ void loop() {
       autoMode();
 
       break;
-
 
     case MAINTENANCE:
 
@@ -1583,7 +1969,7 @@ void loop() {
   communication.update(processCommand);
 
 
-  // PROCESS SD CARD TASKS
+  // SERVICE SD CARD
 
   serviceSD();
 
