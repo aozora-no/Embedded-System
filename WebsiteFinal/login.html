@@ -99,9 +99,65 @@ $("showPassword").onclick = () => {
   );
 };
 
-form.onsubmit = e => {
+let busy = false;
+
+function setBusy(value) {
+
+  busy = value;
+
+  $("submit").disabled = value;
+
+  email.readOnly = value;
+  password.readOnly = value;
+
+  $("submit").textContent =
+    value ? "Signing in..." : "Sign in";
+
+}
+
+form.onsubmit = async e => {
+
   e.preventDefault();
-  message("Authentication is not connected yet.");
+
+  if (busy || !form.reportValidity()) return;
+
+  setBusy(true);
+  message("Checking your account...");
+
+  try {
+
+    await auth.setPersistence(
+      firebase.auth.Auth.Persistence.LOCAL
+    );
+
+    const result = await auth.signInWithEmailAndPassword(
+      email.value.trim(),
+      password.value
+    );
+
+    if (!await approved(result.user)) {
+
+      await auth.signOut();
+
+      message(
+        "Account is not approved. Contact the device owner.",
+        "error"
+      );
+
+      return;
+    }
+
+    location.replace("index.html");
+
+  } catch (err) {
+
+    message(err.message || "Sign-in failed.", "error");
+
+  } finally {
+
+    setBusy(false);
+
+  }
 };
 
 </script>
