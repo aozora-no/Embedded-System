@@ -236,6 +236,10 @@ function accessError(error) {
 
   $("message").textContent = error.message;
 
+  firebaseConnected = false;
+
+  refreshDashboard();
+
 }
 
 auth.onAuthStateChanged(async user => {
