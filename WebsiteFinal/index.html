@@ -51,6 +51,10 @@
 
     <a href="#sensorLogs">Sensor Logs</a>
 
+    <a href="#sleepHistory">Sleep History</a>
+
+    <a href="#maintenanceHistory">Maintenance History</a>
+
   </nav>
 
 
@@ -267,7 +271,6 @@
 
     </div>
 
-
     <div class="tablewrap">
 
       <table>
@@ -320,9 +323,6 @@
 
     </div>
 
-
-    <!-- PAGINATION -->
-
     <div class="pagination">
 
       <button class="secondary" id="logPrev"
@@ -344,6 +344,167 @@
     </div>
 
     <p class="feedback" id="logMessage" role="status"></p>
+
+  </section>
+
+
+  <!-- SLEEP HISTORY -->
+
+  <section class="card history-card" id="sleepHistory">
+
+    <div class="section-heading">
+
+      <h2>Sleep History</h2>
+
+      <button class="secondary" id="sleepRefresh"
+        onclick="loadHistory('sleep', 0, 'refresh')">
+
+        Refresh
+
+      </button>
+
+    </div>
+
+    <div class="tablewrap">
+
+      <table>
+
+        <thead>
+
+          <tr>
+
+            <th>Sleep date</th>
+
+            <th>Sleep time</th>
+
+            <th>Wake date</th>
+
+            <th>Wake time</th>
+
+            <th>Duration</th>
+
+            <th>Status</th>
+
+          </tr>
+
+        </thead>
+
+        <tbody id="sleepTable">
+
+          <tr>
+
+            <td colspan="6">Loading...</td>
+
+          </tr>
+
+        </tbody>
+
+      </table>
+
+    </div>
+
+    <div class="pagination">
+
+      <button class="secondary" id="sleepPrev"
+        onclick="pageStep('sleep', -1)" disabled>
+
+        Previous
+
+      </button>
+
+      <span id="sleepPage">Page 1</span>
+
+      <button class="secondary" id="sleepNext"
+        onclick="pageStep('sleep', 1)" disabled>
+
+        Next
+
+      </button>
+
+    </div>
+
+    <p class="feedback" id="sleepMessage" role="status"></p>
+
+  </section>
+
+
+  <!-- MAINTENANCE HISTORY -->
+
+  <section class="card history-card" id="maintenanceHistory">
+
+    <div class="section-heading">
+
+      <h2>Maintenance History</h2>
+
+      <button class="secondary" id="maintenanceRefresh"
+        onclick="loadHistory('maintenance', 0, 'refresh')">
+
+        Refresh
+
+      </button>
+
+    </div>
+
+    <div class="tablewrap">
+
+      <table>
+
+        <thead>
+
+          <tr>
+
+            <th>Start date</th>
+
+            <th>Start time</th>
+
+            <th>End date</th>
+
+            <th>End time</th>
+
+            <th>Duration</th>
+
+            <th>Status</th>
+
+          </tr>
+
+        </thead>
+
+        <tbody id="maintenanceTable">
+
+          <tr>
+
+            <td colspan="6">Loading...</td>
+
+          </tr>
+
+        </tbody>
+
+      </table>
+
+    </div>
+
+    <div class="pagination">
+
+      <button class="secondary" id="maintenancePrev"
+        onclick="pageStep('maintenance', -1)" disabled>
+
+        Previous
+
+      </button>
+
+      <span id="maintenancePage">Page 1</span>
+
+      <button class="secondary" id="maintenanceNext"
+        onclick="pageStep('maintenance', 1)" disabled>
+
+        Next
+
+      </button>
+
+    </div>
+
+    <p class="feedback" id="maintenanceMessage"
+      role="status"></p>
 
   </section>
 
@@ -737,9 +898,20 @@ function refreshDashboard() {
     (s.mode !== 2 && s.ageSec > 12);
 
 
-  // UPDATE CURRENT MODE
+  // CHECK OPERATING MODE CHANGE
+
+  const modeChanged = currentMode !== s.mode;
 
   currentMode = s.mode;
+
+
+  // REFRESH HISTORY AFTER MODE CHANGE
+
+  if (modeChanged) {
+
+    setTimeout(refreshHistories, 5000);
+
+  }
 
 
   // DISPLAY CONNECTION STATUS
@@ -828,11 +1000,19 @@ function refreshDashboard() {
   }
 
 
-  // DISPLAY DEVICE ERROR
+  // DISPLAY DEVICE ERROR AND UNSAVED HISTORY
 
   $("deviceError").textContent =
 
-    s.error || "";
+    s.error || (
+
+      s.droppedHistory
+
+      ? "Unsaved sessions: " + s.droppedHistory
+
+      : ""
+
+    );
 
 
   // UPDATE BUTTON STATES
@@ -876,6 +1056,42 @@ const pages = {
     path: "logs",
 
     columns: 13,
+
+    index: 0,
+
+    cursors: [""],
+
+    next: "",
+
+    more: false,
+
+    loaded: false
+
+  },
+
+  sleep: {
+
+    path: "sleepLogs",
+
+    columns: 6,
+
+    index: 0,
+
+    cursors: [""],
+
+    next: "",
+
+    more: false,
+
+    loaded: false
+
+  },
+
+  maintenance: {
+
+    path: "maintenanceLogs",
+
+    columns: 6,
 
     index: 0,
 
@@ -1012,9 +1228,33 @@ function datePart(ms, clock) {
 }
 
 
-// GET SENSOR LOG VALUES
+// FORMAT SESSION DURATION
+
+function duration(ms) {
+
+  if (ms == null) {
+
+    return "--";
+
+  }
+
+  const s = Math.floor(Number(ms) / 1000);
+
+  return Math.floor(s / 3600) + "h " +
+
+    Math.floor((s % 3600) / 60) + "m " +
+
+    s % 60 + "s";
+
+}
+
+
+// GET TABLE VALUES
 
 function rowValues(kind, x) {
+
+
+  // SENSOR LOG VALUES
 
   if (kind === "log") {
 
@@ -1053,6 +1293,51 @@ function rowValues(kind, x) {
     ];
 
   }
+
+
+  // SLEEP AND MAINTENANCE HISTORY VALUES
+
+  const sleep = kind === "sleep";
+
+  const end = sleep ? x.wakeAt : x.endAt;
+
+
+  // SESSION STATUS
+
+  const status = {
+
+    sleeping: "Sleeping",
+
+    in_progress: "In progress",
+
+    completed: "Completed",
+
+    interrupted: "Interrupted"
+
+  };
+
+
+  // RETURN HISTORY VALUES
+
+  return [
+
+    x.startDate || datePart(x.startAt, false),
+
+    x.startTime || datePart(x.startAt, true),
+
+    (sleep ? x.wakeDate : x.endDate) ||
+
+      datePart(end, false),
+
+    (sleep ? x.wakeTime : x.endTime) ||
+
+      datePart(end, true),
+
+    duration(x.durationMs),
+
+    status[x.state] || x.state || "--"
+
+  ];
 
 }
 
@@ -1283,6 +1568,31 @@ function loadLogs(
 }
 
 
+// LOAD SLEEP AND MAINTENANCE HISTORY
+
+function loadHistory(
+
+  kind,
+
+  before = 0,
+
+  action = "refresh"
+
+) {
+
+  return loadPage(
+
+    kind,
+
+    before,
+
+    action
+
+  );
+
+}
+
+
 // LOGOUT
 
 async function logout() {
@@ -1294,7 +1604,7 @@ async function logout() {
 }
 
 
-// AUTOMATIC LOG REFRESH
+// AUTOMATIC HISTORY REFRESH
 
 async function refreshHistories() {
 
@@ -1305,6 +1615,9 @@ async function refreshHistories() {
   }
 
   for (const kind of Object.keys(pages)) {
+
+    // Refresh only the first page so browsing
+    // older records is not interrupted.
 
     if (pages[kind].index === 0) {
 
@@ -1443,7 +1756,7 @@ auth.onAuthStateChanged(async user => {
     setInterval(refreshDashboard, 1000);
 
 
-    // REFRESH SENSOR LOGS EVERY 30 SECONDS
+    // REFRESH HISTORY EVERY 30 SECONDS
 
     setInterval(refreshHistories, 30000);
 
