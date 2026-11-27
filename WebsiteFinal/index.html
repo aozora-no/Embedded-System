@@ -102,6 +102,35 @@
 
     </section>
 
+
+    <!-- OPERATING MODES -->
+
+    <section class="card" id="operatingModes">
+
+      <h2>Operating Modes</h2>
+
+      <div class="controls">
+
+        <button id="autoBtn" onclick="sendCommand('AUTO')">
+          Auto
+        </button>
+
+        <button id="maintBtn" onclick="sendCommand('MAINT')">
+          Maintenance
+        </button>
+
+        <button id="sleepBtn" onclick="sendCommand('SLEEP')">
+          Sleep
+        </button>
+
+        <button id="wakeBtn" onclick="sendCommand('WAKE')">
+          Wake
+        </button>
+
+      </div>
+
+    </section>
+
   </div>
 
 
@@ -193,6 +222,31 @@
 
   </section>
 
+
+  <!-- MAINTENANCE CONTROLS -->
+
+  <section class="card hidden" id="maintenance">
+
+    <h2>Maintenance</h2>
+
+    <div class="controls">
+
+      <button onclick="sendCommand('READ')">
+        Check Sensors
+      </button>
+
+      <button onclick="sendCommand('PUMP1')">
+        Dispense (3s)
+      </button>
+
+      <button onclick="sendCommand('TARE')">
+        Tare Weight
+      </button>
+
+    </div>
+
+  </section>
+
 </main>
 
 
@@ -220,11 +274,17 @@ let currentMode = -1;
 
 let latestStatus = null;
 
+let latestCommand = null;
+
 let firebaseConnected = false;
 
 let serverOffset = 0;
 
 let deviceOnline = false;
+
+let commandPending = false;
+
+let switchingMode = false;
 
 
 // FORMAT DATE AND TIME
@@ -248,6 +308,275 @@ function formatTime(ms) {
 }
 
 
+// SEND COMMANDS TO FIREBASE
+
+async function sendCommand(cmd) {
+
+  if (!deviceOnline || commandPending || switchingMode) {
+
+    return;
+
+  }
+
+
+  // COMMAND CONFIRMATION
+
+  if (
+    cmd === "SLEEP" &&
+    !confirm("Put Arduino into sleep mode?")
+  ) return;
+
+  if (
+    cmd === "PUMP1" &&
+    !confirm("Dispense for 3 seconds?")
+  ) return;
+
+  if (
+    cmd === "TARE" &&
+    !confirm("Tare the current weight?")
+  ) return;
+
+
+  commandPending = true;
+
+  updateButtons();
+
+  $("message").textContent = "Sending " + cmd + "...";
+
+
+  try {
+
+    const user = auth.currentUser;
+
+    if (!user) {
+
+      throw new Error("Sign in first.");
+
+    }
+
+
+    // GENERATE COMMAND ID
+
+    const id = device.child("commandIds").push().key;
+
+
+    // COMMAND DATA
+
+    const request = {
+
+      id,
+
+      cmd,
+
+      status: "pending",
+
+      createdAt: serverTimestamp,
+
+      uid: user.uid
+
+    };
+
+
+    // SEND COMMAND USING FIREBASE TRANSACTION
+
+    const result = await device.child("command").transaction(old => {
+
+      if (
+        old &&
+        (
+          old.status === "pending" ||
+          old.status === "processing"
+        )
+      ) {
+
+        return;
+
+      }
+
+      return request;
+
+    }, undefined, false);
+
+
+    // CHECK IF COMMAND WAS SENT
+
+    if (!result.committed) {
+
+      throw new Error("Another command is still pending.");
+
+    }
+
+    latestCommand = result.snapshot.val();
+
+    renderCommand();
+
+
+  } catch (error) {
+
+    $("message").textContent =
+      "Command failed: " + error.message;
+
+  } finally {
+
+    commandPending = false;
+
+    updateButtons();
+
+  }
+
+}
+
+
+// DISPLAY COMMAND STATUS
+
+function renderCommand() {
+
+  const c = latestCommand;
+
+  switchingMode = Boolean(
+
+    c && (
+
+      c.status === "pending" ||
+
+      c.status === "processing"
+
+    )
+
+  );
+
+  if (c) {
+
+    $("message").textContent =
+      c.cmd + ": " + (c.message || c.status);
+
+  }
+
+  updateButtons();
+
+}
+
+
+// UPDATE BUTTON STATES
+
+function updateButtons() {
+
+  const auto = $("autoBtn");
+
+  const maint = $("maintBtn");
+
+  const sleep = $("sleepBtn");
+
+  const wake = $("wakeBtn");
+
+
+  // REMOVE ACTIVE BUTTON DESIGN
+
+  auto.classList.remove("active");
+
+  maint.classList.remove("active");
+
+  sleep.classList.remove("active");
+
+  wake.classList.remove("active");
+
+
+  // WAIT FOR UPDATED DEVICE STATUS
+
+  const awaitingStatus =
+
+    latestCommand &&
+
+    latestCommand.status === "confirmed" &&
+
+    latestStatus &&
+
+    latestCommand.updatedAt > latestStatus.updatedAt &&
+
+    ["AUTO", "MAINT", "SLEEP", "WAKE"].includes(
+      latestCommand.cmd
+    );
+
+
+  // LOCK BUTTONS DURING COMMAND PROCESSING
+
+  const locked =
+
+    !deviceOnline ||
+
+    currentMode < 0 ||
+
+    commandPending ||
+
+    switchingMode ||
+
+    awaitingStatus;
+
+
+  // OPERATING MODE BUTTONS
+
+  auto.disabled =
+    locked || currentMode === 2 || currentMode === 0;
+
+  maint.disabled =
+    locked || currentMode === 2 || currentMode === 1;
+
+  sleep.disabled =
+    locked || currentMode === 2;
+
+  wake.disabled =
+    locked || currentMode !== 2;
+
+
+  // MAINTENANCE BUTTONS
+
+  document.querySelectorAll("#maintenance button").forEach(b => {
+
+    b.disabled = locked || currentMode !== 1;
+
+  });
+
+
+  // AUTO MODE
+
+  if (currentMode === 0) {
+
+    auto.classList.add("active");
+
+  }
+
+
+  // MAINTENANCE MODE
+
+  if (currentMode === 1) {
+
+    maint.classList.add("active");
+
+  }
+
+
+  // SLEEP MODE
+
+  if (currentMode === 2) {
+
+    sleep.classList.add("active");
+
+  }
+
+
+  // SHOW MAINTENANCE CONTROLS
+
+  $("maintenance").classList.toggle(
+
+    "hidden",
+
+    currentMode !== 1
+
+  );
+
+}
+
+
 // LIVE DASHBOARD
 
 function refreshDashboard() {
@@ -255,16 +584,22 @@ function refreshDashboard() {
   const raw = latestStatus;
 
   const age = raw && typeof raw.updatedAt === "number"
+
     ? Math.max(0, Date.now() + serverOffset - raw.updatedAt)
+
     : Infinity;
 
 
   // CHECK DEVICE CONNECTION
 
   deviceOnline =
+
     firebaseConnected &&
+
     age < 20000 &&
+
     raw &&
+
     raw.wifi === true;
 
 
@@ -273,6 +608,8 @@ function refreshDashboard() {
   if (!raw) {
 
     $("connection").textContent = "Waiting";
+
+    updateButtons();
 
     return;
 
@@ -290,8 +627,11 @@ function refreshDashboard() {
   };
 
   s.stale =
+
     !deviceOnline ||
+
     !s.liveValid ||
+
     (s.mode !== 2 && s.ageSec > 12);
 
 
@@ -303,19 +643,23 @@ function refreshDashboard() {
   // DISPLAY CONNECTION STATUS
 
   $("connection").textContent =
+
     deviceOnline ? "Online" : "Offline";
 
 
   // DISPLAY OPERATING MODE
 
   $("mode").textContent =
+
     ["AUTO", "MAINTENANCE", "SLEEP"][s.mode]
+
     || "UNKNOWN";
 
 
   // DISPLAY LAST MODE CHANGE
 
   $("changed").textContent =
+
     formatTime(s.lastChangeAt);
 
 
@@ -324,21 +668,25 @@ function refreshDashboard() {
   if (!deviceOnline) {
 
     $("freshness").textContent =
+
       "Last known data";
 
   } else if (s.mode === 2) {
 
     $("freshness").textContent =
+
       "Paused";
 
   } else if (s.stale) {
 
     $("freshness").textContent =
+
       "No recent data";
 
   } else {
 
     $("freshness").textContent =
+
       s.ageSec + "s ago";
 
   }
@@ -348,8 +696,8 @@ function refreshDashboard() {
 
   if (s.liveValid) {
 
-    // Display the Firebase sensor values
-    // without scaling or rounding.
+    // Display Firebase sensor values without
+    // scaling or rounding.
 
     for (const id of [
 
@@ -381,7 +729,13 @@ function refreshDashboard() {
   // DISPLAY DEVICE ERROR
 
   $("deviceError").textContent =
+
     s.error || "";
+
+
+  // UPDATE BUTTON STATES
+
+  updateButtons();
 
 }
 
@@ -395,6 +749,11 @@ async function logout() {
   location.replace("login.html");
 
 }
+
+
+// INITIAL BUTTON STATES
+
+updateButtons();
 
 
 // AUTHENTICATION STATUS
@@ -490,6 +849,17 @@ auth.onAuthStateChanged(async user => {
       latestStatus = snap.val();
 
       refreshDashboard();
+
+    }, accessError);
+
+
+    // RECEIVE COMMAND STATUS
+
+    device.child("command").on("value", snap => {
+
+      latestCommand = snap.val();
+
+      renderCommand();
 
     }, accessError);
 
