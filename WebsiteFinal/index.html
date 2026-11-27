@@ -6,144 +6,247 @@
   <title>HygieneMist</title>
   <link rel="stylesheet" href="style.css">
 </head>
+
 <body>
 
 <main class="container" id="dashboard" hidden>
-<button class="secondary" onclick="logout()">Logout</button>
+
   <header>
+
     <div class="brand">
+
       <span class="brand-mark" aria-hidden="true">
-        <svg viewBox="0 0 24 24" fill="none"
-          stroke="currentColor" stroke-width="1.8"
-          stroke-linecap="round" stroke-linejoin="round">
+
+        <svg viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.8"
+          stroke-linecap="round"
+          stroke-linejoin="round">
+
           <path d="M12 3C9 7 5 11 5 15a7 7 0 0 0 14 0c0-4-4-8-7-12Z"/>
+
           <path d="M8 15a4 4 0 0 0 4 4"/>
+
         </svg>
+
       </span>
+
       <h1>HygieneMist</h1>
+
     </div>
+
+    <button class="secondary" onclick="logout()">
+      Logout
+    </button>
+
   </header>
 
+
+  <!-- NAVIGATION -->
+
   <nav class="navigation" aria-label="Dashboard sections">
+
     <a href="#overview">Overview</a>
+
   </nav>
+
+
+  <!-- SYSTEM STATUS -->
 
   <div class="overview" id="overview">
 
     <section class="card system-card">
+
       <h2>System Status</h2>
 
       <div class="status-grid">
+
         <div>
+
           <span>Connection</span>
-          <strong id="connection">Not connected yet</strong>
+
+          <strong id="connection">Waiting</strong>
+
         </div>
 
         <div>
+
           <span>Mode</span>
+
           <strong id="mode">--</strong>
+
         </div>
 
         <div>
+
           <span>Last mode change</span>
+
           <strong id="changed">--</strong>
+
         </div>
 
         <div>
+
           <span>Sensor update</span>
+
           <strong id="freshness">--</strong>
+
         </div>
+
       </div>
 
       <p id="message" class="feedback" role="status"></p>
+
       <p id="deviceError" class="feedback error" role="status"></p>
 
     </section>
 
   </div>
 
+
+  <!-- SENSOR DATA -->
+
   <section class="card sensor-card">
+
     <h2>Sensor Data</h2>
 
     <div class="grid">
 
       <div class="sensor">
+
         <h3>Distance</h3>
+
         <div class="value" id="distance">--</div>
+
         <small>mm</small>
+
       </div>
 
       <div class="sensor">
+
         <h3>Weight</h3>
+
         <div class="value" id="weight">--</div>
+
         <small>g</small>
+
       </div>
 
       <div class="sensor">
+
         <h3>Object detected</h3>
+
         <div class="value" id="objectDetected">--</div>
+
         <small>0 / 1</small>
+
       </div>
 
       <div class="sensor">
+
         <h3>Non-contact 1</h3>
+
         <div class="value" id="noncontact1">--</div>
+
         <small>0 / 1</small>
+
       </div>
 
       <div class="sensor">
+
         <h3>Non-contact 2</h3>
+
         <div class="value" id="noncontact2">--</div>
+
         <small>0 / 1</small>
+
       </div>
 
       <div class="sensor">
+
         <h3>Pump</h3>
+
         <div class="value" id="pump">--</div>
+
         <small>0 / 1</small>
+
       </div>
 
       <div class="sensor">
+
         <h3>Non-contact level</h3>
+
         <div class="value" id="level">--</div>
+
       </div>
 
       <div class="sensor">
+
         <h3>Weight status</h3>
+
         <div class="value" id="weightStatus">--</div>
+
       </div>
 
     </div>
+
   </section>
 
 </main>
+
+
+<!-- FIREBASE LIBRARIES -->
+
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
+
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-database-compat.js"></script>
+
 <script src="firebase-config.js"></script>
+
 
 <script>
 
+// GET HTML ELEMENTS
+
 const $ = id => document.getElementById(id);
 
-  let currentMode = -1;
+
+// SYSTEM VARIABLES
+
+let currentMode = -1;
+
 let latestStatus = null;
+
 let firebaseConnected = false;
+
 let serverOffset = 0;
+
 let deviceOnline = false;
+
+
+// FORMAT DATE AND TIME
 
 function formatTime(ms) {
 
   if (!ms || Number(ms) < 1700000000000) {
+
     return "Not available";
+
   }
 
   return new Date(Number(ms)).toLocaleString("en-PH", {
+
     timeZone: "Asia/Manila",
+
     hour12: false
+
   });
 
 }
+
 
 // LIVE DASHBOARD
 
@@ -155,62 +258,117 @@ function refreshDashboard() {
     ? Math.max(0, Date.now() + serverOffset - raw.updatedAt)
     : Infinity;
 
-  deviceOnline = firebaseConnected &&
-    age < 20000 && raw && raw.wifi === true;
+
+  // CHECK DEVICE CONNECTION
+
+  deviceOnline =
+    firebaseConnected &&
+    age < 20000 &&
+    raw &&
+    raw.wifi === true;
+
+
+  // CHECK AVAILABLE DATA
 
   if (!raw) {
+
     $("connection").textContent = "Waiting";
+
     return;
+
   }
 
+
+  // CHECK SENSOR DATA AGE
+
   const s = {
+
     ...raw,
+
     ageSec: Math.floor(age / 1000) + (raw.ageSec || 0)
+
   };
 
-  s.stale = !deviceOnline || !s.liveValid ||
+  s.stale =
+    !deviceOnline ||
+    !s.liveValid ||
     (s.mode !== 2 && s.ageSec > 12);
 
+
+  // UPDATE CURRENT MODE
+
   currentMode = s.mode;
+
+
+  // DISPLAY CONNECTION STATUS
 
   $("connection").textContent =
     deviceOnline ? "Online" : "Offline";
 
+
+  // DISPLAY OPERATING MODE
+
   $("mode").textContent =
-    ["AUTO", "MAINTENANCE", "SLEEP"][s.mode] || "UNKNOWN";
+    ["AUTO", "MAINTENANCE", "SLEEP"][s.mode]
+    || "UNKNOWN";
+
+
+  // DISPLAY LAST MODE CHANGE
 
   $("changed").textContent =
     formatTime(s.lastChangeAt);
 
+
+  // DISPLAY SENSOR UPDATE STATUS
+
   if (!deviceOnline) {
 
-    $("freshness").textContent = "Last known data";
+    $("freshness").textContent =
+      "Last known data";
 
   } else if (s.mode === 2) {
 
-    $("freshness").textContent = "Paused";
+    $("freshness").textContent =
+      "Paused";
 
   } else if (s.stale) {
 
-    $("freshness").textContent = "No recent data";
+    $("freshness").textContent =
+      "No recent data";
 
   } else {
 
-    $("freshness").textContent = s.ageSec + "s ago";
+    $("freshness").textContent =
+      s.ageSec + "s ago";
 
   }
 
+
+  // DISPLAY SENSOR READINGS
+
   if (s.liveValid) {
 
+    // Display the Firebase sensor values
+    // without scaling or rounding.
+
     for (const id of [
+
       "distance",
+
       "weight",
+
       "objectDetected",
+
       "noncontact1",
+
       "noncontact2",
+
       "pump",
+
       "level",
+
       "weightStatus"
+
     ]) {
 
       $(id).textContent = s[id] ?? "--";
@@ -219,18 +377,32 @@ function refreshDashboard() {
 
   }
 
-  $("deviceError").textContent = s.error || "";
+
+  // DISPLAY DEVICE ERROR
+
+  $("deviceError").textContent =
+    s.error || "";
 
 }
+
+
+// LOGOUT
 
 async function logout() {
 
   await auth.signOut();
+
   location.replace("login.html");
 
 }
 
+
+// AUTHENTICATION STATUS
+
 let started = false;
+
+
+// HANDLE ACCESS ERROR
 
 function accessError(error) {
 
@@ -242,35 +414,95 @@ function accessError(error) {
 
 }
 
+
+// CHECK USER AUTHENTICATION
+
 auth.onAuthStateChanged(async user => {
 
   if (!user) {
+
     location.replace("login.html");
+
     return;
+
   }
 
   try {
 
+
+    // CHECK APPROVED ACCOUNT
+
     if (!await approved(user)) {
+
       await logout();
+
       return;
+
     }
 
     if (started) return;
 
     started = true;
 
+
+    // SHOW DASHBOARD
+
     $("dashboard").hidden = false;
+
+
+    // MONITOR ACCOUNT APPROVAL
 
     db.ref("approvedUsers/" + user.uid).on("value", snap => {
 
-      if (snap.val() !== true) logout();
+      if (snap.val() !== true) {
+
+        logout();
+
+      }
 
     }, accessError);
+
+
+    // GET FIREBASE SERVER TIME OFFSET
+
+    db.ref(".info/serverTimeOffset").on("value", snap => {
+
+      serverOffset = snap.val() || 0;
+
+    });
+
+
+    // CHECK FIREBASE CONNECTION
+
+    db.ref(".info/connected").on("value", snap => {
+
+      firebaseConnected = snap.val() === true;
+
+      refreshDashboard();
+
+    });
+
+
+    // RECEIVE REAL-TIME SENSOR DATA
+
+    device.child("status").on("value", snap => {
+
+      latestStatus = snap.val();
+
+      refreshDashboard();
+
+    }, accessError);
+
+
+    // REFRESH DASHBOARD EVERY SECOND
+
+    setInterval(refreshDashboard, 1000);
+
 
   } catch (error) {
 
     alert(error.message);
+
     await logout();
 
   }
@@ -278,5 +510,6 @@ auth.onAuthStateChanged(async user => {
 });
 
 </script>
+
 </body>
 </html>
