@@ -49,6 +49,8 @@
 
     <a href="#overview">Overview</a>
 
+    <a href="#sensorLogs">Sensor Logs</a>
+
   </nav>
 
 
@@ -244,6 +246,104 @@
       </button>
 
     </div>
+
+  </section>
+
+
+  <!-- SENSOR LOGS -->
+
+  <section class="card history-card" id="sensorLogs">
+
+    <div class="section-heading">
+
+      <h2>Sensor Logs</h2>
+
+      <button class="secondary" id="logRefresh"
+        onclick="loadLogs(0, 'refresh')">
+
+        Refresh
+
+      </button>
+
+    </div>
+
+
+    <div class="tablewrap">
+
+      <table>
+
+        <thead>
+
+          <tr>
+
+            <th>ID</th>
+
+            <th>Date</th>
+
+            <th>Time</th>
+
+            <th>Uptime (s)</th>
+
+            <th>Distance (mm)</th>
+
+            <th>Weight (g)</th>
+
+            <th>Object detected</th>
+
+            <th>Non-contact 1</th>
+
+            <th>Non-contact 2</th>
+
+            <th>Pump</th>
+
+            <th>Event</th>
+
+            <th>Level</th>
+
+            <th>Weight status</th>
+
+          </tr>
+
+        </thead>
+
+        <tbody id="logTable">
+
+          <tr>
+
+            <td colspan="13">Loading...</td>
+
+          </tr>
+
+        </tbody>
+
+      </table>
+
+    </div>
+
+
+    <!-- PAGINATION -->
+
+    <div class="pagination">
+
+      <button class="secondary" id="logPrev"
+        onclick="pageStep('log', -1)" disabled>
+
+        Previous
+
+      </button>
+
+      <span id="logPage">Page 1</span>
+
+      <button class="secondary" id="logNext"
+        onclick="pageStep('log', 1)" disabled>
+
+        Next
+
+      </button>
+
+    </div>
+
+    <p class="feedback" id="logMessage" role="status"></p>
 
   </section>
 
@@ -611,6 +711,8 @@ function refreshDashboard() {
 
     updateButtons();
 
+    updatePageButtons();
+
     return;
 
   }
@@ -737,6 +839,447 @@ function refreshDashboard() {
 
   updateButtons();
 
+  updatePageButtons();
+
+}
+
+
+// SAFE TABLE VALUES
+
+function safe(value) {
+
+  return String(value == null ? "--" : value)
+
+    .replace(/[&<>"']/g, c => ({
+
+      "&": "&amp;",
+
+      "<": "&lt;",
+
+      ">": "&gt;",
+
+      '"': "&quot;",
+
+      "'": "&#39;"
+
+    }[c]));
+
+}
+
+
+// FIREBASE PAGINATION
+
+const pages = {
+
+  log: {
+
+    path: "logs",
+
+    columns: 13,
+
+    index: 0,
+
+    cursors: [""],
+
+    next: "",
+
+    more: false,
+
+    loaded: false
+
+  }
+
+};
+
+let readingLogs = false;
+
+
+// UPDATE PAGINATION BUTTONS
+
+function updatePageButtons() {
+
+  for (const kind of Object.keys(pages)) {
+
+    const p = pages[kind];
+
+    const locked = readingLogs || !firebaseConnected;
+
+    $(kind + "Prev").disabled =
+
+      locked || p.index === 0;
+
+    $(kind + "Next").disabled =
+
+      locked || !p.more;
+
+    $(kind + "Refresh").disabled = locked;
+
+    $(kind + "Page").textContent =
+
+      "Page " + (p.index + 1);
+
+  }
+
+}
+
+
+// DISPLAY EMPTY TABLE MESSAGE
+
+function showEmpty(kind, message) {
+
+  $(kind + "Table").innerHTML =
+
+    '<tr><td colspan="' + pages[kind].columns + '">' +
+
+    safe(message) +
+
+    '</td></tr>';
+
+}
+
+
+// PREVIOUS AND NEXT PAGE
+
+function pageStep(kind, direction) {
+
+  const p = pages[kind];
+
+  if (direction < 0 && p.index > 0) {
+
+    loadPage(
+
+      kind,
+
+      p.cursors[p.index - 1],
+
+      "previous"
+
+    );
+
+  }
+
+  if (direction > 0 && p.more) {
+
+    loadPage(
+
+      kind,
+
+      p.next,
+
+      "next"
+
+    );
+
+  }
+
+}
+
+
+// FORMAT LOG DATE AND TIME
+
+function datePart(ms, clock) {
+
+  if (!ms || Number(ms) < 1700000000000) {
+
+    return "--";
+
+  }
+
+  const date = new Date(Number(ms));
+
+  return clock
+
+    ? date.toLocaleTimeString("en-GB", {
+
+        timeZone: "Asia/Manila",
+
+        hour12: false
+
+      })
+
+    : date.toLocaleDateString("en-CA", {
+
+        timeZone: "Asia/Manila",
+
+        year: "numeric",
+
+        month: "2-digit",
+
+        day: "2-digit"
+
+      });
+
+}
+
+
+// GET SENSOR LOG VALUES
+
+function rowValues(kind, x) {
+
+  if (kind === "log") {
+
+    const date = datePart(x.uploaded_at, false);
+
+    const time = datePart(x.uploaded_at, true);
+
+    return [
+
+      x.id,
+
+      date === "--" ? x.date : date,
+
+      time === "--" ? x.time : time,
+
+      x.uptime_s,
+
+      x.distance_mm,
+
+      x.weight,
+
+      x.ultrasonic_zero ?? x.tof_zero,
+
+      x.noncontact1 ?? x.water1,
+
+      x.noncontact2 ?? x.water2,
+
+      x.pump ?? x.relay,
+
+      x.event ?? "LEGACY",
+
+      x.level,
+
+      x.weight_status
+
+    ];
+
+  }
+
+}
+
+
+// CHECK NUMERIC FIREBASE KEYS
+
+function integerKey(key) {
+
+  return /^-?(0|[1-9]\d*)$/.test(key) &&
+
+    Number(key) >= -2147483648 &&
+
+    Number(key) <= 2147483647;
+
+}
+
+
+// COMPARE FIREBASE KEYS
+
+function compareKeys(a, b) {
+
+  const an = integerKey(a);
+
+  const bn = integerKey(b);
+
+  if (an && bn) {
+
+    return Number(a) - Number(b);
+
+  }
+
+  if (an !== bn) {
+
+    return an ? -1 : 1;
+
+  }
+
+  return a < b ? -1 : a > b ? 1 : 0;
+
+}
+
+
+// LOAD RECORDS FROM FIREBASE
+
+async function loadPage(
+
+  kind,
+
+  before = "",
+
+  action = "refresh"
+
+) {
+
+  if (readingLogs || !firebaseConnected) {
+
+    return;
+
+  }
+
+  readingLogs = true;
+
+  updatePageButtons();
+
+  const p = pages[kind];
+
+  const message = $(kind + "Message");
+
+  before = before ? String(before) : "";
+
+  message.textContent = "Loading...";
+
+
+  try {
+
+
+    // CREATE FIREBASE QUERY
+
+    let query = device.child(p.path).orderByKey();
+
+    if (before) {
+
+      query = query.endAt(before);
+
+    }
+
+
+    // RETRIEVE RECORDS
+
+    const data = (
+
+      await query.limitToLast(
+
+        before ? 7 : 6
+
+      ).once("value")
+
+    ).val();
+
+
+    // REMOVE DUPLICATE CURSOR RECORD
+
+    const entries = Object.entries(data || {}).filter(([key, x]) =>
+
+      x &&
+
+      typeof x === "object" &&
+
+      (!before || compareKeys(key, before) < 0)
+
+    );
+
+
+    // SORT RECORDS
+
+    entries.sort((a, b) => compareKeys(b[0], a[0]));
+
+
+    // DISPLAY FIVE RECORDS PER PAGE
+
+    const rows = entries.slice(0, 5);
+
+
+    // UPDATE PAGE INDEX
+
+    if (action === "refresh") {
+
+      p.index = 0;
+
+      p.cursors = [""];
+
+    } else if (action === "previous") {
+
+      p.index--;
+
+      p.cursors.length = p.index + 1;
+
+    } else {
+
+      p.index++;
+
+      p.cursors[p.index] = before;
+
+    }
+
+
+    // CHECK FOR MORE RECORDS
+
+    p.more = entries.length > 5;
+
+    p.next = rows.length
+
+      ? rows[rows.length - 1][0]
+
+      : "";
+
+
+    // DISPLAY TABLE RECORDS
+
+    if (rows.length) {
+
+      $(kind + "Table").innerHTML = rows.map(([key, x]) =>
+
+        "<tr>" +
+
+        rowValues(kind, x).map(v =>
+
+          "<td>" + safe(v) + "</td>"
+
+        ).join("") +
+
+        "</tr>"
+
+      ).join("");
+
+    } else {
+
+      showEmpty(kind, "No records.");
+
+    }
+
+    p.loaded = true;
+
+    message.textContent = "";
+
+
+  } catch (error) {
+
+    message.textContent = error.message;
+
+    if (!p.loaded) {
+
+      showEmpty(kind, "Unable to load records.");
+
+    }
+
+  } finally {
+
+    readingLogs = false;
+
+    updatePageButtons();
+
+  }
+
+}
+
+
+// LOAD SENSOR LOGS
+
+function loadLogs(
+
+  before = 0,
+
+  action = "refresh"
+
+) {
+
+  return loadPage(
+
+    "log",
+
+    before,
+
+    action
+
+  );
+
 }
 
 
@@ -751,9 +1294,34 @@ async function logout() {
 }
 
 
+// AUTOMATIC LOG REFRESH
+
+async function refreshHistories() {
+
+  if (readingLogs || !firebaseConnected) {
+
+    return;
+
+  }
+
+  for (const kind of Object.keys(pages)) {
+
+    if (pages[kind].index === 0) {
+
+      await loadPage(kind);
+
+    }
+
+  }
+
+}
+
+
 // INITIAL BUTTON STATES
 
 updateButtons();
+
+updatePageButtons();
 
 
 // AUTHENTICATION STATUS
@@ -839,6 +1407,12 @@ auth.onAuthStateChanged(async user => {
 
       refreshDashboard();
 
+      if (firebaseConnected) {
+
+        refreshHistories();
+
+      }
+
     });
 
 
@@ -867,6 +1441,11 @@ auth.onAuthStateChanged(async user => {
     // REFRESH DASHBOARD EVERY SECOND
 
     setInterval(refreshDashboard, 1000);
+
+
+    // REFRESH SENSOR LOGS EVERY 30 SECONDS
+
+    setInterval(refreshHistories, 30000);
 
 
   } catch (error) {
