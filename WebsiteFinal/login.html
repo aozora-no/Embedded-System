@@ -1,1 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>HygieneMist | Login</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="login-page">
+  <main class="card login-card">
+    <div class="brand"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3C9 7 5 11 5 15a7 7 0 0 0 14 0c0-4-4-8-7-12Z"/><path d="M8 15a4 4 0 0 0 4 4"/></svg></span><h1>HygieneMist</h1></div>
+    <h2 id="heading">Login</h2>
+    <form id="form" aria-labelledby="heading">
+      <div class="field">
+        <label for="email">Email</label>
+        <input id="email" name="email" type="email" required maxlength="120" autocomplete="username" autocapitalize="none" spellcheck="false">
+      </div>
+      <div class="field">
+        <label for="password">Password</label>
+        <div class="pass">
+          <input id="password" name="password" type="password" required minlength="6" maxlength="128" autocomplete="current-password">
+          <button type="button" class="show" id="showPassword" aria-pressed="false">Show</button>
+        </div>
+      </div>
+      <button class="primary" id="submit" type="submit">Sign in</button>
+      <p id="msg" class="feedback" role="status" aria-live="polite" hidden></p>
+    </form>
+  </main>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-database-compat.js"></script>
+<script src="firebase-config.js"></script>
+<script>
+const $=id=>document.getElementById(id);
+const form=$("form"), email=$("email"), password=$("password"), msg=$("msg");
+let busy=false;
+function message(text,kind="info"){
+  msg.textContent=text;msg.dataset.kind=kind;msg.hidden=!text;
+}
+$("showPassword").onclick=()=>{
+  const visible=password.type==="password";
+  password.type=visible?"text":"password";
+  $("showPassword").textContent=visible?"Hide":"Show";
+  $("showPassword").setAttribute("aria-pressed",String(visible));
+};
+function setBusy(value){
+  busy=value;$("submit").disabled=value;
+  email.readOnly=value;password.readOnly=value;
+  $("submit").textContent=value?"Signing in...":"Sign in";
+}
+form.onsubmit=async e=>{
+  e.preventDefault();if(busy||!form.reportValidity())return;
+  setBusy(true);message("Checking your account...");
+  try{
+    await auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
+    const result = await auth.signInWithEmailAndPassword(email.value.trim(), password.value);
+    if (!await approved(result.user)) {
+      await auth.signOut();
+      message("Account is not approved. Contact the device owner.", "error");
+      return;
+    }
+    location.replace("index.html");
+  }catch(err){message(err.message || "Sign-in failed.","error");}
+  finally{setBusy(false);}
+};
+</script>
+</body>
+</html>
 
